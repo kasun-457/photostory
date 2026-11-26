@@ -8,6 +8,7 @@ from ..core.pipeline import Step
 from .a4 import A4Step
 from .catchlight import CatchlightStep
 from .background import BackgroundStep
+from .glasses import GlassesStep
 from .guides import GuidesStep
 from .hair import HairBrightnessStep, HairTidyStep
 from .level import LevelStep
@@ -32,7 +33,7 @@ def default_steps() -> list[Step]:
         # 9: 쌍꺼풀 (2단계)
         NeckStep(),        # 10 (§10 목 20px 미만 유동화 / 이상 몸 회전)
         HairTidyStep(),    # 11 (§11-3 잔머리. 핀·머리끈은 아직)
-        # 12: 안경 (2단계)
+        GlassesStep(),     # 12 (안경 착용: P5에서 뗀 테를 얹음)
         BackgroundStep(),   # 13
         HairBrightnessStep(),  # 14 (§13 너무 밝을 때만)
         ShoulderStep(),    # 15 (§14 규격별 트리밍 경계에서 어깨 높이)

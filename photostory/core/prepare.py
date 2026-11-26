@@ -78,6 +78,8 @@ def analyze(path: Path | str, hub: ModelHub, token: CancelToken | None = None,
         a.masks["몸피부"] = basic.clean_confidence(seg.body_skin)
     if seg.clothes is not None:
         a.masks["옷"] = basic.clean_confidence(seg.clothes)
+    if seg.accessories is not None:
+        a.masks["장식"] = basic.clean_confidence(seg.accessories)   # 안경테 떼기에 씀 (P5)
     t0 = time.perf_counter()                                             # P3: 눈 꼭짓점·밑라인
     ey = eyes.measure_eyes(rgb, a.points)
     a.points.update(ey["points"])

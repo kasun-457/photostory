@@ -11,6 +11,7 @@ from ..models.hub import ModelHub
 from ..steps import default_steps
 from ..steps.background import background_rgb_for
 from .pipeline import Analysis, CancelToken, Pipeline, RenderParams, RenderResult
+from .glasses import prepare_glasses
 from .prepare import analyze
 from .session import PARTS, Session
 from .specs import Spec, SpecRegistry
@@ -67,12 +68,19 @@ class Processor:
     def start(self, session: Session, token: CancelToken | None = None) -> None:
         assert session.original is not None
         a = self.prepare(session.original, token)
-        # 안경 사진(P5)은 2단계에서 원본 좌표에 맞춰 쓴다. 지금은 분석만 해 둔다.
+        # P5 안경 짝 정렬: 안경 쓴 사진을 원본 좌표에 맞추고 안경테만 떼어 둔다 (12번 단계가 얹음)
+        a.extra.pop("glasses", None)
+        a.extra.pop("glasses_note", None)
         if session.customer.glasses and session.glasses_photo:
             try:
-                self.prepare(session.glasses_photo, token)
-            except Exception:
-                pass
+                g = self.prepare(session.glasses_photo, token)
+                cut = prepare_glasses(a, g)
+                if cut is None:
+                    a.extra["glasses_note"] = "안경: 안경 쓴 사진에서 안경테를 찾지 못함"
+                else:
+                    a.extra["glasses"] = cut
+            except Exception as e:   # 안경 사진이 이상해도 보정은 계속한다
+                a.extra["glasses_note"] = f"안경: 안경 쓴 사진을 쓰지 못함 ({e})"
         self.pipeline.reset(a)
 
     # ---------- render
