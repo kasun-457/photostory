@@ -95,6 +95,7 @@ class Session:
     glasses_photo: Path | None = None
     placements: dict[str, Placement] = field(default_factory=dict)
     disabled_steps: set[str] = field(default_factory=set)
+    crease_ref: str = "auto"   # 쌍꺼풀 기준 눈: "auto"(더 또렷한 눈) / "왼눈" / "오른눈" (가이드 §5-3)
 
     def ready_to_start(self) -> bool:
         if self.original is None:

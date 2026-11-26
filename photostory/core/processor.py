@@ -101,6 +101,7 @@ class Processor:
                 "name": c.name.strip(),
                 "gender": c.gender.value,
                 "glasses": c.glasses,
+                "crease_ref": session.crease_ref,
                 "strength": dict(c.strength.values),
                 # 단계는 자기 부위 키만 param_keys에 넣는다 → 다른 부위를 바꾸면 다시 계산하지 않음
                 **{f"strength.{k}": round(c.strength.get(k), 2) for k in PARTS},

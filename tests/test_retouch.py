@@ -86,7 +86,7 @@ def test_strength_zero_and_isolation(hub, portrait, tmp_path):
     proc = Processor(hub, SpecRegistry())
     s = _session(tmp_path, portrait)
     proc.start(s)
-    s.disabled_steps = {"skin", "tone"}
+    s.disabled_steps = {"skin", "tone", "nose_shadow"}     # 명암 강도를 쓰는 단계 모두
     plain = proc.render(s, preview=True).frame.outputs["retouched"]
     s.disabled_steps = set()
     for k in ("skin", "tone"):
