@@ -12,6 +12,7 @@ from .guides import GuidesStep
 from .level import LevelStep
 from .neck import NeckStep
 from .sharpen import SharpenStep
+from .shoulder import ShoulderStep
 from .skin import SkinStep
 from .symmetry import SymmetryStep
 from .tone import ToneStep
@@ -31,7 +32,8 @@ def default_steps() -> list[Step]:
         NeckStep(),        # 10 (§10 목 20px 미만 유동화 / 이상 몸 회전)
         # 11~12: 머리카락·안경 (2단계)
         BackgroundStep(),   # 13
-        # 14~15: 머리카락 밝기, 어깨 밸런스 (1·2단계)
+        # 14: 머리카락 밝기 (2단계)
+        ShoulderStep(),    # 15 (§14 규격별 트리밍 경계에서 어깨 높이)
         TransferStep(),     # 16 (수정본은 이 단계 직전 이미지)
         A4Step(),           # 17
     ]

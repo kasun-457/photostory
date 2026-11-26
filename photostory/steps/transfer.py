@@ -27,12 +27,28 @@ class TransferCheck:
     ok: bool              # 규격 기준선 안인지
 
 
-def place(frame: Frame, spec: Spec, pl: Placement) -> tuple[np.ndarray, np.ndarray | None, TransferCheck]:
+def scale_for(frame: Frame, spec: Spec, pl: Placement) -> float:
+    """수정본 → 전송본 배율 (가이드 §15-2)."""
     g = frame.outputs["guides"]
     head = max(1.0, g["chin_y"] - g["crown_y"])
-    W, H = spec.size_px
     chin_target = spec.chin_min_line + pl.chin_bias * (spec.chin_max_line - spec.chin_min_line)
-    s = (chin_target - spec.crown_line) / head * (1.0 + pl.scale)
+    return (chin_target - spec.crown_line) / head * (1.0 + pl.scale)
+
+
+def crop_rect(frame: Frame, spec: Spec, pl: Placement) -> tuple[float, float, float, float, float]:
+    """전송본에 들어갈 수정본 범위 (x0, y0, x1, y1, 배율) — 가이드 §14 어깨 밸런스 1번 식."""
+    g = frame.outputs["guides"]
+    s = scale_for(frame, spec, pl)
+    W, H = spec.size_px
+    x0 = g["center_x"] - spec.center_x / s
+    y0 = g["crown_y"] - (spec.crown_line + pl.shift * H) / s
+    return x0, y0, x0 + W / s, y0 + H / s, s
+
+
+def place(frame: Frame, spec: Spec, pl: Placement) -> tuple[np.ndarray, np.ndarray | None, TransferCheck]:
+    g = frame.outputs["guides"]
+    W, H = spec.size_px
+    s = scale_for(frame, spec, pl)
 
     src = frame.image
     sh, sw = src.shape[:2]
