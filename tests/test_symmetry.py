@@ -26,7 +26,7 @@ def crooked(hub, portrait):
     def piece(keys, grow):
         m = np.zeros(w.roi_shape, np.uint8)
         for k in keys:
-            m |= R.poly_mask(w.roi_shape, a.regions[k], hull=True, offset=w.offset())
+            m |= R.poly_mask(w.roi_shape, w.to_local(a.regions[k]), hull=True)
         return R.feather(R.dilate(m, grow), 0.05 * fw)
 
     w.shift(piece(("코아래", "입술"), 0.05 * fw), 12, 0)
@@ -34,7 +34,7 @@ def crooked(hub, portrait):
     return w.apply_image(portrait)
 
 
-def _run(hub, img, strength=None):
+def _run(hub, img, strength=None, preview=False):
     path = Path(tempfile.mkdtemp()) / "a.png"
     cv2.imencode(".png", cv2.cvtColor(img, cv2.COLOR_RGB2BGR))[1].tofile(str(path))
     s = Session(Customer(name="a", purposes=["passport"]), original=path)
@@ -44,7 +44,7 @@ def _run(hub, img, strength=None):
             s.customer.strength.set(k, strength)
     proc = Processor(hub, SpecRegistry())
     proc.start(s)
-    f = proc.render(s, preview=False).frame
+    f = proc.render(s, preview=preview).frame
     proc.clear()
     return f
 
@@ -55,7 +55,8 @@ def test_symmetry_fixes_nose_mouth_eye(hub, crooked):
     b, a = sym["before"], sym["after"]
     # MediaPipe 얼굴 점은 평균 얼굴 쪽으로 끌려서 12px 옮긴 코·입을 절반 정도로만 잰다 (진행상황.md 2-2)
     assert b["코"] > 4 and b["입"] > 4, b
-    assert abs(a["코"]) < 1.5 and abs(a["입"]) < 1.5, a
+    # 코·입은 한 조각으로 평균만큼 옮기므로 둘의 차이는 남을 수 있다 (가이드도 같은 방식)
+    assert abs(a["코"] + a["입"]) / 2 < 1.0 and abs(a["코"]) < 2.5 and abs(a["입"]) < 2.5, a
     assert any(m.startswith("코·입") for m in sym["moved"]) and any("높이" in m for m in sym["moved"])
     for key in ("볼라인", "눈동자"):
         if key in b:
@@ -73,6 +74,18 @@ def test_symmetry_strength(hub, crooked):
 
 
 def test_symmetry_leaves_symmetric_face_alone(hub, portrait):
-    """이미 거의 대칭인 코·입은 5px 기준 아래라 옮기지 않는다."""
-    f = _run(hub, portrait)
-    assert not any(m.startswith("코·입") for m in f.outputs["symmetry"]["moved"])
+    """왼쪽 절반을 뒤집어 붙인 완전 대칭 얼굴: 코·입은 5px 기준 아래라 옮기지 않는다."""
+    a = analyze("", hub, rgb=portrait)
+    p = a.points
+    cx = round((p["왼눈_안쪽꼭짓점"][0] + p["오른눈_안쪽꼭짓점"][0]) / 2)
+    sym = portrait.copy()
+    w = min(cx, sym.shape[1] - cx)
+    sym[:, cx:cx + w] = portrait[:, cx - w:cx][:, ::-1]
+    # 사진관 원본 크기로 키워서 본다: 5px 기준은 원본(얼굴 폭 약 1200px) 기준이고,
+    # 테스트 사진 크기(얼굴 폭 260px)에서는 1px 남짓이라 측정 흔들림보다 작다
+    big = cv2.resize(sym, None, fx=2.9116, fy=2.9116, interpolation=cv2.INTER_CUBIC)
+    f = _run(hub, big, preview=True)
+    out = f.outputs["symmetry"]
+    to_orig = 1 / f.scale
+    assert not any(m.startswith("코·입") for m in out["moved"]), out
+    assert abs(out["before"]["코"]) * to_orig < 5 and abs(out["before"]["입"]) * to_orig < 5, out

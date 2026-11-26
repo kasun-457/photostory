@@ -15,7 +15,7 @@ import numpy as np
 from ..models.hub import ModelHub
 from ..models.roles import REQUIRED_POINTS, FaceLandmarks, PersonSegmentation
 from .io.imageio import read_image
-from .measure import basic, catchlight, eyes, sharpness, spots
+from .measure import basic, catchlight, eyes, nose_mouth, sharpness, spots
 from .pipeline import Analysis, CancelToken
 
 log = logging.getLogger(__name__)
@@ -76,10 +76,13 @@ def analyze(path: Path | str, hub: ModelHub, token: CancelToken | None = None,
                  confidence={"face": face.confidence}, skin_mask=skin, regions=dict(face.regions))
     if seg.body_skin is not None:
         a.masks["몸피부"] = basic.clean_confidence(seg.body_skin)
+    if seg.clothes is not None:
+        a.masks["옷"] = basic.clean_confidence(seg.clothes)
     t0 = time.perf_counter()                                             # P3: 눈 꼭짓점·밑라인
     ey = eyes.measure_eyes(rgb, a.points)
     a.points.update(ey["points"])
     a.extra["level"] = ey["level"]
+    a.points.update(nose_mouth.measure(rgb, a.regions, a.points))      # 코·입 중심 (사진에서)
     a.extra["sharpness"] = sharpness.feature_sharpness(rgb, a.points, a.regions)
     a.extra["catchlight"] = catchlight.judge(rgb, a.points)
     t["eyes"] = time.perf_counter() - t0

@@ -3,8 +3,9 @@
 가이드 순서대로, 각 항목마다 지금 위치를 다시 재서 움직인다. 변형은 모아 두었다가 한 번만 샘플링한다.
   1. 턱 좌우 (유동화): 입 높이 얼굴 윤곽(초록/E)·턱목 경계(자주/D)에서 넓은 쪽을 좁은 쪽에 맞춘다.
      사진에서 다시 찾은 선(basis '영상')만 쓴다. 추정한 선으로는 고치지 않는다 (보수적).
-  2. 코 중심: 코 밑이 중심선에서 5px(원본 기준) 이상 어긋나면 코 조각을 옮긴다.
-  3. 입 중심·입꼬리 수평: 입 중심이 5px 이상 어긋나면 옮기고, 입꼬리가 기울면 입 조각을 돌린다.
+  2·3. 코·입 중심: 코 중심(콧구멍 가운데)·입 중심(입술 색 영역 가운데)이 중심선에서 5px(원본 기준)
+     이상 어긋나면 코와 입을 한 조각으로 함께 옮긴다. 두 중심은 사진에서 잰 값(core/measure/nose_mouth.py)을
+     쓴다 — 얼굴 점은 평균 얼굴 쪽으로 끌려 어긋남을 절반 정도로만 잰다. 입꼬리가 기울면 입 조각을 돌린다.
   4. 눈 높이 (큰 눈 기준): 작은 눈의 눈동자 위·아래 가운데를 큰 눈에 맞춘다.
      눈 '크기' 키우기는 하지 않는다 (본인처럼 보이지 않을 위험, 가이드 §0).
   5. 눈동자 좌우: 홍채 안쪽(주황/C)이 중심선 기준 대칭이 되게 두 눈을 옮긴다 (차이를 반씩).
@@ -55,11 +56,11 @@ def _piece(cur: _Cur, keys, grow: float, feather: float, line_key=None, line_w=0
     m = np.zeros(w.roi_shape, np.uint8)
     for k in keys:
         if k in cur.r:
-            m |= R.poly_mask(w.roi_shape, cur.r[k], hull=True, offset=w.offset())
+            m |= R.poly_mask(w.roi_shape, w.to_local(cur.r[k]), hull=True)
     if line_key and line_key in cur.r:
-        m |= R.line_mask(w.roi_shape, cur.r[line_key], line_w, w.offset())
+        m |= R.line_mask(w.roi_shape, w.to_local(cur.r[line_key]), w.px(line_w))
     # 조각 안은 그대로 옮기고(무게 1), 페더 구간에서만 늘어나도록: 넓힌 뒤 페더만큼 흐림
-    return R.feather(R.dilate(m, grow + feather), feather)
+    return R.feather(R.dilate(m, w.px(grow + feather)), w.px(feather))
 
 
 class SymmetryStep(Step):
@@ -79,7 +80,7 @@ class SymmetryStep(Step):
         before = measure_template(frame, gender)
         cx = before.center_x
         roi = R.face_box(frame.regions, frame.image.shape, 0.45 * fw)
-        warp = Warp(frame.image.shape, roi)
+        warp = Warp(frame.image.shape, roi, grid=max(1, round(fw / 300)))   # 원본에선 4px 격자
         cur = _Cur(frame, warp)
         done: list[str] = []
         to_orig = 1.0 / frame.scale
@@ -107,9 +108,8 @@ class SymmetryStep(Step):
         # 2·3. 코·입 중심: 가이드처럼 코와 입을 한 조각으로 넉넉히 오려 함께 옮긴다.
         #      따로 옮기면 두 조각의 페더가 겹쳐 코가 두 번 움직인다 (넘침).
         if (st["nose"] > 0 or st["mouth"] > 0) and "코밑" in cur.p and "왼입꼬리" in cur.p:
-            lm, rm = cur.p["왼입꼬리"], cur.p["오른입꼬리"]
-            dn = cur.p["코밑"][0] - cx
-            dm = (lm[0] + rm[0]) / 2 - cx
+            dn = _nose_x(cur.p) - cx
+            dm = _mouth_x(cur.p) - cx
             if max(abs(dn), abs(dm)) >= NOSE_MOUTH_MIN * k:
                 # 코·입 강도를 각자 반영한 평균 이동
                 move = -(dn * st["nose"] + dm * st["mouth"]) / 2
@@ -203,9 +203,7 @@ class SymmetryStep(Step):
         y_top = cur.p["코밑"][1] if "코밑" in cur.p else y_m - 0.2 * fw
         y_end = y_b + 0.10 * fw
         peak = max(e_m, e_b)
-        h, w = cur.w.roi_shape
-        ox, oy = cur.w.offset()
-        ys = np.arange(h, dtype=np.float32) + oy
+        ys = cur.w.gy[:, 0]
         prof = np.interp(ys, [y_top, y_m, y_b, y_end], [0.0, e_m, e_b, 0.0], left=0.0, right=0.0) / peak
         # 윤곽 x: 모델 턱선을 입 높이의 실제 윤곽에 맞춰 옮긴 것
         jaw = cur.r.get(f"{side}턱선_선")
@@ -217,11 +215,23 @@ class SymmetryStep(Step):
             xs += x_act - float(np.interp(y_m, jy, jx))
         else:
             xs = np.full_like(ys, x_act)
-        gx = np.arange(w, dtype=np.float32)[None, :] + ox     # 윤곽 위가 가장 많이(=부족분만큼) 움직임
+        gx = cur.w.gx[0][None, :]                              # 윤곽 위가 가장 많이(=부족분만큼) 움직임
         wt = np.exp(-0.5 * ((gx - xs[:, None]) / (0.07 * fw)) ** 2) * prof[:, None]
-        wt = R.feather(wt.astype(np.float32), 0.02 * fw)
+        wt = R.feather(wt.astype(np.float32), cur.w.px(0.02 * fw))
         label = f"입 높이 {e_m:.1f} / 꺾임 {e_b:.1f}px"
         return wt, peak, label
+
+
+def _nose_x(p) -> float:
+    """코 중심 x: 사진에서 잰 콧구멍 가운데(코_중심)가 있으면 그것, 없으면 얼굴 점 코밑."""
+    return p["코_중심"][0] if "코_중심" in p else p["코밑"][0]
+
+
+def _mouth_x(p) -> float:
+    """입 중심 x: 입술 색으로 잰 입_중심이 있으면 그것, 없으면 입꼬리 가운데."""
+    if "입_중심" in p:
+        return p["입_중심"][0]
+    return (p["왼입꼬리"][0] + p["오른입꼬리"][0]) / 2
 
 
 def _asym(t, p, gender, cx: float) -> dict[str, float]:
@@ -232,9 +242,9 @@ def _asym(t, p, gender, cx: float) -> dict[str, float]:
         if line is not None and line.sides:
             out[name] = round((cx - line.sides[0]) - (line.sides[1] - cx), 2)
     if "코밑" in p:
-        out["코"] = round(p["코밑"][0] - cx, 2)
+        out["코"] = round(_nose_x(p) - cx, 2)
     if "왼입꼬리" in p:
-        out["입"] = round((p["왼입꼬리"][0] + p["오른입꼬리"][0]) / 2 - cx, 2)
+        out["입"] = round(_mouth_x(p) - cx, 2)
     if "왼눈_홍채안쪽" in p:
         out["눈동자"] = round((cx - p["왼눈_홍채안쪽"][0]) - (p["오른눈_홍채안쪽"][0] - cx), 2)
     return out

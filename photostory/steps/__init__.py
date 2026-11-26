@@ -10,6 +10,7 @@ from .catchlight import CatchlightStep
 from .background import BackgroundStep
 from .guides import GuidesStep
 from .level import LevelStep
+from .neck import NeckStep
 from .sharpen import SharpenStep
 from .skin import SkinStep
 from .symmetry import SymmetryStep
@@ -26,7 +27,9 @@ def default_steps() -> list[Step]:
         SharpenStep(),     # 6 (규칙 방식: 액션 '수정-02', 흐릴 때만)
         ToneStep(),        # 7 (규칙 방식: 액션 '닷징버닝')
         SymmetryStep(),    # 8 (§9 유동화 + 부분 이동)
-        # 9~12: 쌍꺼풀·목·머리카락·안경 (2단계)
+        # 9: 쌍꺼풀 (2단계)
+        NeckStep(),        # 10 (§10 목 20px 미만 유동화 / 이상 몸 회전)
+        # 11~12: 머리카락·안경 (2단계)
         BackgroundStep(),   # 13
         # 14~15: 머리카락 밝기, 어깨 밸런스 (1·2단계)
         TransferStep(),     # 16 (수정본은 이 단계 직전 이미지)
