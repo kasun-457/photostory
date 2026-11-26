@@ -58,8 +58,14 @@ def guided_filter(guide: np.ndarray, src: np.ndarray, r: int, eps: float) -> np.
     return _box(a, r) * guide + _box(b, r)
 
 
+def clean_confidence(m: np.ndarray, lo: float = 0.15, hi: float = 0.85) -> np.ndarray:
+    """분할 모델은 배경에도 0.1 안팎의 값을 남긴다. lo 이하는 0, hi 이상은 1로 펴 준다."""
+    return np.clip((m.astype(np.float32) - lo) / (hi - lo), 0, 1)
+
+
 def refine_mask(rgb: np.ndarray, coarse: np.ndarray, work_side: int = 2000) -> np.ndarray:
     """거친 사람 영역을 사진 경계(머리카락 끝)에 맞게 다듬는다. 결과는 원본 크기 float32 0~1."""
+    coarse = clean_confidence(coarse)
     h, w = rgb.shape[:2]
     s = min(1.0, work_side / max(h, w))
     size = (max(1, round(w * s)), max(1, round(h * s)))
