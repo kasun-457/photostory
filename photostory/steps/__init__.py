@@ -9,6 +9,8 @@ from .a4 import A4Step
 from .background import BackgroundStep
 from .guides import GuidesStep
 from .level import LevelStep
+from .skin import SkinStep
+from .tone import ToneStep
 from .transfer import TransferStep
 
 
@@ -16,7 +18,10 @@ def default_steps() -> list[Step]:
     return [
         LevelStep(),        # 1
         GuidesStep(),       # 2
-        # 3~12: 피부·명암·대칭·목·머리카락·안경 (1·2단계)
+        SkinStep(),        # 3·4 (규칙 방식: 액션 '수정-01')
+        # 5~6: 눈 반사점, 선명하게 (1단계)
+        ToneStep(),        # 7 (규칙 방식: 액션 '닷징버닝')
+        # 8~12: 대칭·목·머리카락·안경 (2단계)
         BackgroundStep(),   # 13
         # 14~15: 머리카락 밝기, 어깨 밸런스 (1·2단계)
         TransferStep(),     # 16 (수정본은 이 단계 직전 이미지)

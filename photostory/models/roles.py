@@ -27,6 +27,10 @@ OPTIONAL_POINTS = (
     "왼볼_입높이", "오른볼_입높이", "왼턱선", "오른턱선", "왼턱끝쪽", "오른턱끝쪽",
     "왼얼굴_옆", "오른얼굴_옆",
 )
+# 얼굴 부위 영역 (사진 기준 좌우). 닫힌 다각형: 윤곽·눈·눈썹·입술·코아래.
+# 꺾은선: 콧대(위→코끝), 왼턱선·오른턱선(볼 옆→턱끝 쪽).
+FACE_REGIONS = ("얼굴윤곽", "왼눈", "오른눈", "왼눈썹", "오른눈썹", "입술", "코아래",
+                "콧대", "왼턱선_선", "오른턱선_선")
 POSE_POINTS = ("왼어깨", "오른어깨", "코_자세")
 
 
@@ -36,6 +40,8 @@ class FaceResult:
     confidence: float = 1.0
     all_points: np.ndarray | None = None             # 모델 고유 전체 점 (N, 2), 디버그·확장용
     extra: dict = field(default_factory=dict)
+    # 표준 이름 → 다각형/꺾은선 (K, 2). 이름은 FACE_REGIONS (사진 기준 좌우)
+    regions: dict[str, np.ndarray] = field(default_factory=dict)
 
 
 @dataclass

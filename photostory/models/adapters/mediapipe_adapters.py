@@ -34,6 +34,23 @@ FACE_MESH_INDEX = {
     "턱끝": 152, "이마_위": 10,
 }
 
+# 얼굴 부위 영역. MediaPipe 이름의 RIGHT_* 는 손님 기준이라 사진 왼쪽이다.
+FACE_REGION_INDEX = {
+    "얼굴윤곽": [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378,
+                400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21,
+                54, 103, 67, 109],
+    "왼눈": [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246],
+    "오른눈": [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466],
+    "왼눈썹": [46, 53, 52, 65, 55, 107, 66, 105, 63, 70],
+    "오른눈썹": [276, 283, 282, 295, 285, 336, 296, 334, 293, 300],
+    "입술": [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37,
+            39, 40, 185],
+    "코아래": [129, 49, 64, 98, 97, 2, 326, 327, 294, 279, 358],
+    "콧대": [168, 6, 197, 195, 5, 4],
+    "왼턱선_선": [93, 132, 58, 172, 136, 150, 149, 176, 148],
+    "오른턱선_선": [323, 361, 288, 397, 365, 379, 378, 400, 377],
+}
+
 # MediaPipe 자세: 11 = 왼어깨(손님 기준) = 사진 오른쪽
 POSE_INDEX = {"왼어깨": 12, "오른어깨": 11, "코_자세": 0}
 
@@ -74,6 +91,13 @@ class _MPBase:
         with self._lock:
             return fn(self._task)
 
+    def _base_options(self):
+        # 경로 대신 내용을 넘긴다. Windows의 MediaPipe는 한글 등이 든 경로의 파일을 열지 못한다
+        # (예: C:\사진이야기\... → "Unable to open file", 2026-11-26 확인).
+        from pathlib import Path
+        from mediapipe.tasks.python import BaseOptions
+        return BaseOptions(model_asset_buffer=Path(self.config["path"]).read_bytes())
+
     @staticmethod
     def _mp_image(rgb):
         import mediapipe as mp
@@ -82,9 +106,9 @@ class _MPBase:
 
 class MediaPipeFace(_MPBase, FaceLandmarks):
     def _create(self):
-        from mediapipe.tasks.python import BaseOptions, vision
+        from mediapipe.tasks.python import vision
         opts = vision.FaceLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=str(self.config["path"])),
+            base_options=self._base_options(),
             num_faces=2, min_face_detection_confidence=0.4)
         return vision.FaceLandmarker.create_from_options(opts)
 
@@ -98,16 +122,18 @@ class MediaPipeFace(_MPBase, FaceLandmarks):
         faces = [np.array([[p.x * w, p.y * h] for p in lm], np.float64) for lm in res.face_landmarks]
         pts = max(faces, key=lambda a: np.ptp(a[:, 0]) * np.ptp(a[:, 1])) / s
         named = {k: (float(pts[i, 0]), float(pts[i, 1])) for k, i in FACE_MESH_INDEX.items() if i < len(pts)}
-        return FaceResult(named, 1.0, pts, {"faces": len(faces)})
+        regions = {k: pts[idx].astype(np.float32) for k, idx in FACE_REGION_INDEX.items()
+                   if max(idx) < len(pts)}
+        return FaceResult(named, 1.0, pts, {"faces": len(faces)}, regions)
 
 
 class MediaPipeSelfieMulticlass(_MPBase, PersonSegmentation):
     """클래스: 0 배경, 1 머리카락, 2 몸 피부, 3 얼굴 피부, 4 옷, 5 그 밖(장신구)."""
 
     def _create(self):
-        from mediapipe.tasks.python import BaseOptions, vision
+        from mediapipe.tasks.python import vision
         opts = vision.ImageSegmenterOptions(
-            base_options=BaseOptions(model_asset_path=str(self.config["path"])),
+            base_options=self._base_options(),
             output_confidence_masks=True, output_category_mask=False)
         return vision.ImageSegmenter.create_from_options(opts)
 
@@ -124,9 +150,9 @@ class MediaPipeSelfieMulticlass(_MPBase, PersonSegmentation):
 
 class MediaPipePose(_MPBase, PoseLandmarks):
     def _create(self):
-        from mediapipe.tasks.python import BaseOptions, vision
+        from mediapipe.tasks.python import vision
         opts = vision.PoseLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=str(self.config["path"])), num_poses=1)
+            base_options=self._base_options(), num_poses=1)
         return vision.PoseLandmarker.create_from_options(opts)
 
     def detect(self, rgb: np.ndarray) -> PoseResult | None:
