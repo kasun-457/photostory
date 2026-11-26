@@ -1,0 +1,3 @@
+-r requirements.txt
+pytest>=8
+scikit-image>=0.22  # 테스트용 공개 샘플 사진(astronaut, NASA 공개 사진)
