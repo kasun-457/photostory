@@ -5,7 +5,12 @@
 - 각 선은 어떻게 쟀는지(basis)를 함께 낸다: "모델"(얼굴 점 그대로), "영상"(사진 경계에서 다시 찾음),
   "추정"(찾지 못해 근사). 2단계 대칭 보정은 '실제 경계 − 안내선'을 보정량으로 쓴다.
 
-아직 없는 것: 귀 끝선(남자 8번), 쌍꺼풀선(§5-3), 눈 윤곽 위 선(§5-5), 얼굴살 사람의 그림자 턱선(§5-4).
+- 귀 끝선(남자 8번)·귀 끝 머리 폭(F): 얼굴 윤곽 바깥의 피부 덩어리(귀)에서 찾는다. 못 찾으면 생략·두상 끝.
+- 쌍꺼풀선(§5-3): 두 눈 모두 주름을 찾으면 더 또렷한(또는 지정한) 눈의 주름 가장 높은 곳.
+- 눈 윤곽 위 선(§5-5): 윗눈꺼풀이 홍채를 덮어 '홍채 위 경계'와 '눈 윤곽 위'의 차이가 클 때만.
+- 그림자 턱선(§5-4): 바깥 윤곽으로 턱·목 꺾임을 못 찾으면, 얼굴 안쪽 그림자가 시작되는 위쪽 경계가
+  목 옆선과 만나는 점. 가이드도 자동 추적은 참고만 한다고 해서 basis '그림자'로 두고,
+  대칭·목 보정에는 쓰지 않는다 (안내선으로만 보여 줌).
 """
 from __future__ import annotations
 
@@ -219,6 +224,82 @@ def _shoulder_y(person, x, y_from) -> float | None:
     return None if idx.size == 0 else float(y_from + idx[0])
 
 
+def _ears(skin: np.ndarray, oval: np.ndarray, y0: float, y1: float, fw: float):
+    """얼굴 윤곽 바깥에 붙은 피부 덩어리 = 귀. 쪽마다 (아래 끝 y, 바깥 x) 또는 None.
+
+    얼굴 윤곽(모델 다각형)은 실제 얼굴보다 조금 안쪽이라 얼굴 폭 4%만큼 넓혀서 뺀다.
+    """
+    h, w = skin.shape[:2]
+    ya, yb = int(max(0, y0)), int(min(h, y1))
+    if yb - ya < 5:
+        return None, None
+    face = R.dilate(R.poly_mask((h, w), oval), 0.04 * fw) > 0
+    band = (skin[ya:yb] > 0.5) & ~face[ya:yb]
+    band = cv2.morphologyEx(band.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    n, lab, st, _ = cv2.connectedComponentsWithStats(band, connectivity=8)
+    ox0, ox1 = float(oval[:, 0].min()), float(oval[:, 0].max())
+    out = []
+    for side in ("왼", "오른"):
+        best = None
+        for i in range(1, n):
+            x, y, bw, bh, area = st[i]
+            if area < 0.002 * fw * fw or bh < 0.06 * fw or bw > 0.25 * fw:
+                continue
+            inner = x + bw if side == "왼" else x                     # 얼굴 쪽 끝
+            if side == "왼" and not (x + bw <= ox0 + 0.08 * fw and inner >= ox0 - 0.10 * fw):
+                continue
+            if side == "오른" and not (x >= ox1 - 0.08 * fw and inner <= ox1 + 0.10 * fw):
+                continue
+            if best is None or area > st[best][4]:
+                best = i
+        if best is None:
+            out.append(None)
+            continue
+        x, y, bw, bh, _ = st[best]
+        out.append((float(ya + y + bh - 1), float(x if side == "왼" else x + bw - 1)))
+    return out[0], out[1]
+
+
+def _shadow_jaw(gray: np.ndarray, union: np.ndarray, cx: float, mouth: float, chin: float, fw: float):
+    """얼굴살로 바깥 윤곽이 볼에서 목까지 한 줄일 때 (§5-4): 그림자 턱선과 목 옆선이 만나는 점.
+
+    목 옆선 = 턱 끝 아래 바깥 윤곽의 x (거의 세로). 그 x 둘레 몇 열에서 입 높이 아래로 내려가며
+    '밝음 → 어둠'이 가장 센 곳 = 그림자가 시작되는 위쪽 경계 (어두운 중심이 아님, 가이드 경고).
+    (왼 x, 오른 x, 낮은 쪽 y) 또는 None.
+    """
+    h, w = gray.shape[:2]
+    hp = gray - cv2.GaussianBlur(gray, (0, 0), max(2.0, 0.05 * fw))        # 큰 반경 블러를 뺀 하이패스
+    hp = cv2.GaussianBlur(hp, (0, 0), max(0.8, 0.006 * fw))
+    res = []
+    for d in (-1, 1):
+        xs = []
+        for y in np.linspace(chin + 0.05 * fw, chin + 0.25 * fw, 8):
+            l, r = _row_edges(union, int(round(y)), cx - 0.2 * fw, cx + 0.2 * fw, cx)
+            e = l if d < 0 else r
+            if e is not None:
+                xs.append(e)
+        if len(xs) < 4 or np.std(xs) > 0.03 * fw:
+            return None
+        nx = float(np.median(xs)) - d * 0.03 * fw                          # 윤곽 바로 안쪽
+        ya, yb = int(max(0, mouth + 0.05 * fw)), int(min(h, chin + 0.10 * fw))
+        if yb - ya < 5:
+            return None
+        hits, strengths = [], []
+        for x in np.linspace(nx - d * 0.04 * fw, nx, 5):
+            xi = int(round(x))
+            if not 0 <= xi < w:
+                continue
+            g = np.gradient(hp[ya:yb, xi])
+            k = int(np.argmin(g))                                           # 밝음 → 어둠
+            hits.append(ya + k)
+            strengths.append(-g[k])
+        if len(hits) < 3 or np.median(strengths) < 0.6 or np.std(hits) > 0.04 * fw:
+            return None
+        res.append((nx, float(np.median(hits))))
+    (xl, yl), (xr, yr) = res
+    return xl, xr, max(yl, yr)
+
+
 def _pair(cx: float, l: float | None, r: float | None) -> tuple[float, tuple[float, float]] | None:
     if l is None or r is None:
         return None
@@ -269,13 +350,17 @@ def measure_template(frame, gender: str) -> Template:
         sl = p["왼볼_입높이"][0] + 0.15 * (cx - p["왼볼_입높이"][0])
         sr = p["오른볼_입높이"][0] - 0.15 * (p["오른볼_입높이"][0] - cx)
         bend = _jaw_neck_bend(union, cx, mouth, chin + 0.35 * fw, sl, sr, fw)
+    bend_b = "영상"
+    if bend is None and union is not None:
+        bend = _shadow_jaw(gray, union, cx, mouth, chin, fw)
+        if bend is not None:
+            bend_b = "그림자"
+            t.notes.append("턱·목 꺾임: 바깥 윤곽에 꺾임이 없어 얼굴 안쪽 그림자 턱선으로 그음 (추측, 보정에는 안 씀)")
     if bend is None:
         t.notes.append("턱·목 꺾임점을 찾지 못해 턱선 점으로 추정")
         jl, jr = p["왼턱선"], p["오른턱선"]
         bend = (jl[0], jr[0], max(jl[1], jr[1]))
         bend_b = "추정"
-    else:
-        bend_b = "영상"
 
     # 얼굴 윤곽 at 입 높이
     contour = None
@@ -299,11 +384,39 @@ def measure_template(frame, gender: str) -> Template:
         else:
             hl = _head_width(head_mask, cx, brows[0] if brows else corner_y, nostril)
         head = _pair(cx, *(hl or (None, None)))
+    # 귀 (남자 8번·F): 귀가 두상보다 튀어나왔으면 귀 끝, 좌우 중 덜 튀어나온 쪽 (§5-2)
+    ear_l = ear_r = None
+    if not female and frame.skin_mask is not None and "얼굴윤곽" in regs:
+        ear_l, ear_r = _ears(np.maximum(frame.skin_mask, union) if union is not None else frame.skin_mask,
+                             regs["얼굴윤곽"], (brows[0] if brows else corner_y), mouth, fw)
+    ear_head = None
+    if ear_l and ear_r:
+        ep = _pair(cx, ear_l[1], ear_r[1])
+        if head is None or ep[0] > head[0]:
+            ear_head = ep
     shoulder = None
+    if ear_head is not None:
+        head = ear_head
     if head is not None and frame.person_mask is not None:
         ys = [_shoulder_y(frame.person_mask, x, chin + 0.05 * fw) for x in (cx - head[0], cx + head[0])]
         ys = [y for y in ys if y is not None]
         shoulder = max(ys) if ys else None                    # 낮은 쪽
+
+    # 눈 윤곽 위 (§5-5): 큰 눈 기준. 홍채 위 경계와 눈 윤곽(윗속눈썹 라인) 가장 높은 곳의 차이가 클 때만
+    lid_top = None
+    if big in regs:
+        top = float(regs[big][:, 1].min())
+        if eyes[big][0] - top > 0.012 * fw:
+            lid_top = top
+    # 쌍꺼풀 (§5-3): 두 눈 모두 주름이 있을 때만
+    crease_y = None
+    from ...steps.crease import measure_crease          # 늦게 읽기 (단계 모듈이 이 모듈을 읽음)
+    cr = {e: measure_crease(gray, regs, e, b) for e, b in (("왼눈", "왼눈썹"), ("오른눈", "오른눈썹"))}
+    if cr["왼눈"] is not None and cr["오른눈"] is not None:
+        ref = getattr(frame, "crease_ref", None) or "auto"
+        if ref not in cr:
+            ref = max(cr, key=lambda e: cr[e].clarity)
+        crease_y = cr[ref].y
 
     iris_in = None
     if "왼눈_홍채안쪽" in p and "오른눈_홍채안쪽" in p:
@@ -313,6 +426,10 @@ def measure_template(frame, gender: str) -> Template:
     if female:
         if brows:
             H += [Line("A", "눈썹 위", brows[0]), Line("B", "눈썹 아래 끝", brows[1], brows[2])]
+        if crease_y is not None:
+            H.append(Line("쌍꺼풀", "쌍꺼풀 주름 가장 높은 곳", crease_y, "영상"))
+        if lid_top is not None:
+            H.append(Line("눈윤곽위", "눈 윤곽 위 (안검하수)", lid_top))
         H += [Line("C", "윗눈꺼풀", min(e[0] for e in eyes.values())),
               Line("D", "눈 바깥 꼭짓점", corner_y, "영상"),
               Line("E", "아랫눈꺼풀", max(e[1] for e in eyes.values()), "영상"),
@@ -338,6 +455,10 @@ def measure_template(frame, gender: str) -> Template:
     else:
         if brows:
             H += [Line("1", "눈썹 위", brows[0]), Line("2", "눈썹 몸통 아래 끝", brows[1], brows[2])]
+        if crease_y is not None:
+            H.append(Line("2-1", "쌍꺼풀 주름 가장 높은 곳", crease_y, "영상"))
+        if lid_top is not None:
+            H.append(Line("3-0", "눈 윤곽 위 (안검하수)", lid_top))
         H += [Line("3", "눈동자 위 (큰 눈)", eyes[big][0]),
               Line("4", "눈 바깥 꼭짓점", corner_y, "영상"),
               Line("5", "눈동자 아래 (큰 눈)", eyes[big][1], "영상"),
@@ -346,7 +467,16 @@ def measure_template(frame, gender: str) -> Template:
               Line("11", "턱 끝", chin, chin_b)]
         if shoulder is not None:
             H.append(Line("12", "머리 폭이 어깨에 닿는 높이", shoulder, "영상"))
-        t.notes.append("귀 끝선(8번)은 아직 찾지 않음")
+        ears = [e for e in (ear_l, ear_r) if e is not None]
+        if not ears:
+            t.notes.append("귀 끝을 찾지 못해 8번 선 생략, F는 두상 끝")
+        else:
+            ey = float(np.mean([e[0] for e in ears]))
+            if abs(ey - wing) < 0.02 * fw:
+                t.notes.append("귀 끝이 7번 선과 겹쳐 8번 선 생략")
+            else:
+                H.append(Line("8", "귀 끝", ey, "영상"))
+                H.sort(key=lambda l: l.pos)
         V.append(Line("A", "중심선", cx))
         V += [Line("B", "눈 안쪽 끝", x) for x in (p["왼눈_안쪽꼭짓점"][0], p["오른눈_안쪽꼭짓점"][0])]
         if iris_in:
@@ -357,5 +487,5 @@ def measure_template(frame, gender: str) -> Template:
         if contour:
             V.append(Line("E", "입 높이 얼굴 윤곽", contour[0], contour_b, True, contour[1]))
         if head:
-            V.append(Line("F", "두상 끝 (머리 폭)", head[0], "영상", True, head[1]))
+            V.append(Line("F", "귀 끝 (머리 폭)" if ear_head else "두상 끝 (머리 폭)", head[0], "영상", True, head[1]))
     return t

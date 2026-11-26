@@ -89,6 +89,15 @@ class Placement:
 
 
 @dataclass
+class Stroke:
+    """붓 획 하나. mode: "glasses"(안경 쓴 사진에서 살림) / "original"(안경 없는 원본으로 되돌림).
+    pts: 수정본 크기 대비 (x/폭, y/높이). radius: 폭 대비 반지름."""
+    mode: str
+    radius: float
+    pts: list[tuple[float, float]] = field(default_factory=list)
+
+
+@dataclass
 class Session:
     customer: Customer = field(default_factory=Customer)
     original: Path | None = None
@@ -96,6 +105,8 @@ class Session:
     placements: dict[str, Placement] = field(default_factory=dict)
     disabled_steps: set[str] = field(default_factory=set)
     crease_ref: str = "auto"   # 쌍꺼풀 기준 눈: "auto"(더 또렷한 눈) / "왼눈" / "오른눈" (가이드 §5-3)
+    # 안경 복원 붓 (v1.52 '안경수정'): 결과 화면에서 칠한 획. 좌표는 수정본 크기 대비 비율(0~1)
+    glasses_strokes: list["Stroke"] = field(default_factory=list)
 
     def ready_to_start(self) -> bool:
         if self.original is None:

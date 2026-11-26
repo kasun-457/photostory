@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSlider,
                                QSpinBox, QWidget)
@@ -74,6 +74,106 @@ class ImageView(QWidget):
             p.drawLine(int(xx), int(r.top()), int(xx), int(r.bottom()))
             if label:
                 p.drawText(int(xx) + 3, int(r.bottom()) - 4, label)
+
+
+class BrushImageView(ImageView):
+    """칠할 수 있는 이미지 칸 (안경 복원 붓). 왼쪽 버튼 = "glasses", 오른쪽 버튼 = "original".
+
+    획은 이미지 크기 대비 비율 좌표로 내보낸다 (미리보기·원본 해상도가 같은 곳을 칠하도록).
+    radius도 이미지 폭 대비 비율이다.
+    """
+    stroke_done = Signal(str, float, list)   # mode, radius, [(x, y)]
+    COLORS = {"glasses": QColor(0, 150, 255, 90), "original": QColor(255, 80, 0, 90)}
+
+    def __init__(self, placeholder: str = "", parent=None):
+        super().__init__(placeholder, parent)
+        self.brush_on = False
+        self.radius = 0.012
+        self.swap_buttons = False          # 오른쪽 버튼이 없는 펜용 (v1.52 Alt+Y)
+        self._mode: str | None = None
+        self._pts: list[tuple[float, float]] = []
+        self._hover: QPointF | None = None
+        self.setMouseTracking(True)
+
+    def set_brush(self, on: bool) -> None:
+        self.brush_on = on
+        self._mode, self._pts = None, []
+        self.setCursor(Qt.CursorShape.CrossCursor if on else Qt.CursorShape.ArrowCursor)
+        self.update()
+
+    def _to_img(self, pos) -> tuple[float, float] | None:
+        r = self._target()
+        if r.isEmpty():
+            return None
+        x, y = (pos.x() - r.left()) / r.width(), (pos.y() - r.top()) / r.height()
+        return (min(max(x, 0.0), 1.0), min(max(y, 0.0), 1.0))
+
+    def mousePressEvent(self, e):
+        if not self.brush_on or self._pix is None:
+            return super().mousePressEvent(e)
+        b = e.button()
+        if b not in (Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton):
+            return
+        left = (b == Qt.MouseButton.LeftButton) != self.swap_buttons
+        self._mode = "glasses" if left else "original"
+        q = self._to_img(e.position())
+        self._pts = [q] if q else []
+        self.update()
+
+    def mouseMoveEvent(self, e):
+        self._hover = e.position() if self.brush_on else None
+        if self._mode is not None:
+            q = self._to_img(e.position())
+            if q and (not self._pts or q != self._pts[-1]):
+                self._pts.append(q)
+        if self.brush_on:
+            self.update()
+        super().mouseMoveEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        if self._mode is not None:
+            mode, pts = self._mode, self._pts
+            self._mode, self._pts = None, []
+            if pts:
+                self.stroke_done.emit(mode, self.radius, pts)
+            self.update()
+            return
+        super().mouseReleaseEvent(e)
+
+    def leaveEvent(self, e):
+        self._hover = None
+        self.update()
+        super().leaveEvent(e)
+
+    def contextMenuEvent(self, e):
+        if not self.brush_on:
+            super().contextMenuEvent(e)
+
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        if not self.brush_on or self._pix is None:
+            return
+        r = self._target()
+        rad = self.radius * r.width()
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if self._mode is not None and self._pts:
+            c = self.COLORS[self._mode]
+            pts = [QPointF(r.left() + x * r.width(), r.top() + y * r.height()) for x, y in self._pts]
+            if len(pts) == 1:
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(c)
+                p.drawEllipse(pts[0], rad, rad)
+            else:
+                p.setPen(QPen(c, 2 * rad, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+                for a, b in zip(pts, pts[1:]):
+                    p.drawLine(a, b)
+        if self._hover is not None:
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(QColor(255, 255, 255), 1))
+            p.drawEllipse(self._hover, rad, rad)
+            p.setPen(QPen(QColor(0, 0, 0), 1, Qt.PenStyle.DotLine))
+            p.drawEllipse(self._hover, rad, rad)
 
 
 class FineSlider(QWidget):

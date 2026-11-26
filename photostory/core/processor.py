@@ -102,6 +102,8 @@ class Processor:
                 "gender": c.gender.value,
                 "glasses": c.glasses,
                 "crease_ref": session.crease_ref,
+                "glasses_strokes": [(st.mode, round(st.radius, 5), [(round(x, 5), round(y, 5)) for x, y in st.pts])
+                                    for st in session.glasses_strokes] if c.glasses else [],
                 "strength": dict(c.strength.values),
                 # 단계는 자기 부위 키만 param_keys에 넣는다 → 다른 부위를 바꾸면 다시 계산하지 않음
                 **{f"strength.{k}": round(c.strength.get(k), 2) for k in PARTS},

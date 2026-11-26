@@ -11,7 +11,7 @@ from .glasses_data import draw_frame, glasses_photo
 from photostory.core.glasses import prepare_glasses
 from photostory.core.prepare import analyze
 from photostory.core.processor import Processor
-from photostory.core.session import Customer, Session
+from photostory.core.session import Customer, Session, Stroke
 from photostory.core.specs import SpecRegistry
 
 OFF = {"skin", "tone", "sharpen", "catchlight", "symmetry", "neck", "hair_tidy", "hair_bright", "shoulder"}
@@ -23,9 +23,9 @@ def _save(img, name):
     return path
 
 
-def _render(hub, orig, glass=None, glasses=True):
+def _render(hub, orig, glass=None, glasses=True, strokes=()):
     s = Session(Customer(name="a", purposes=["passport"], glasses=glasses), original=_save(orig, "a_원본.png"),
-                glasses_photo=None if glass is None else _save(glass, "a_안경.png"))
+                glasses_photo=None if glass is None else _save(glass, "a_안경.png"), glasses_strokes=list(strokes))
     s.disabled_steps = set(OFF)
     proc = Processor(hub, SpecRegistry())
     proc.start(s)
@@ -105,3 +105,38 @@ def test_crooked_frame_is_leveled(hub, portrait):
 def test_no_glasses_photo_notes(hub, portrait):
     f = _render(hub, portrait, None, glasses=True)
     assert "glasses" not in f.outputs and any("안경" in n for n in f.notes)
+
+
+def test_restore_brush(hub, portrait):
+    """복원 붓: 오른쪽 버튼(원본으로)은 테를 지우고, 왼쪽 버튼(안경 사진에서)은 못 뗀 부분을 살린다."""
+    a = analyze("", hub, rgb=portrait)
+    p = a.points
+    h, w = portrait.shape[:2]
+    # 자동으로는 버려지는 작은 밝은 점(은색 힌지 흉내)을 원본 좌표에 찍은 뒤 안경 사진을 만든다
+    hx, hy = p["왼눈_바깥꼭짓점"][0] - 0.02 * w, p["왼눈_바깥꼭짓점"][1] - 0.012 * h
+    with_dot = portrait.copy()
+    cv2.circle(with_dot, (round(hx), round(hy)), 3, (240, 240, 245), -1)
+    g_img, _ = glasses_photo(with_dot, p)
+    off = _render(hub, portrait, glasses=False)
+    on = _render(hub, portrait, g_img)
+    # 원본 좌표의 점 → 결과 좌표 (수평 회전 반영)
+    keys = [k for k in ("코끝", "턱끝", "왼눈_바깥꼭짓점", "오른눈_바깥꼭짓점", "왼입꼬리", "오른입꼬리")]
+    S, _ = cv2.estimateAffinePartial2D(np.float32([p[k] for k in keys]), np.float32([on.points[k] for k in keys]))
+    qx, qy = S @ np.array([hx, hy, 1.0])
+    d_on = _dark_diff(on, off)
+    cx = on.outputs["guides"]["center_x"]
+    ey = on.points["왼눈_바깥꼭짓점"][1] / h
+    erase = Stroke("original", 0.06, [(0.05, ey), (cx / w - 0.02, ey)])     # 사진 왼쪽 테 전체를 원본으로
+    restore = Stroke("glasses", 6 / w, [(qx / w, qy / h)])                 # 그 뒤 힌지 점만 안경 사진에서
+    br = _render(hub, portrait, g_img, strokes=[erase, restore])
+    d_br = _dark_diff(br, off)
+    left = slice(int(0.1 * w), int(cx - 0.03 * w))
+    assert d_on[:, left].sum() > 100 and d_br[:, left].sum() < 0.1 * d_on[:, left].sum()
+    right = slice(int(cx + 0.03 * w), w)
+    assert d_br[:, right].sum() > 0.8 * d_on[:, right].sum()                # 오른쪽 테는 그대로
+    x, y = round(qx), round(qy)
+    got = br.outputs["retouched"][y - 1:y + 2, x - 1:x + 2].astype(int).mean()
+    base = off.outputs["retouched"][y - 1:y + 2, x - 1:x + 2].astype(int).mean()
+    assert got > base + 30, (got, base)                        # 밝은 힌지 점이 살아남
+    auto = on.outputs["retouched"][y - 1:y + 2, x - 1:x + 2].astype(int).mean()
+    assert auto < got - 30, (auto, got)                        # 자동으로는 안 붙었던 점

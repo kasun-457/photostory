@@ -8,6 +8,10 @@ prepare(P5, core/glasses.py)에서 원본 좌표로 떼어 둔 안경테 조각�
   · 안경테가 윗눈꺼풀(눈 안)을 가리면 조금(얼굴 폭 3%까지) 올린다
 - 이 변환들을 하나로 합쳐 조각을 한 번만 샘플링해 얹는다.
 - 렌즈 반사·렌즈로 커지거나 작아진 눈은 가져오지 않는다 (원본 눈이 그대로).
+- 복원 붓 (v1.52 '안경수정'): 결과 화면에서 칠한 곳을 고친다.
+  · 왼쪽 버튼 = 안경 쓴 사진에서 살림 (자동으로 못 뗀 은색 힌지·끊긴 테)
+  · 오른쪽 버튼 = 원본으로 되돌림 (테와 함께 딸려 온 머리카락·배경)
+  획은 수정본 크기 대비 비율 좌표라 미리보기·원본 해상도에서 같은 곳을 칠한다.
 """
 from __future__ import annotations
 
@@ -21,6 +25,19 @@ from ..core.measure import regions as R
 from ..core.pipeline import Frame, Step
 
 LIFT_MAX = 0.03      # 얼굴 폭 대비
+
+
+def stroke_mask(shape, radius: float, pts) -> np.ndarray:
+    """붓 획 하나(비율 좌표) → float32 0~1 마스크. 가장자리는 반지름의 15%만큼 부드럽게."""
+    h, w = shape[:2]
+    m = np.zeros((h, w), np.uint8)
+    r = max(1, round(radius * w))
+    xy = np.round(np.asarray(pts, np.float64).reshape(-1, 2) * [w, h]).astype(np.int32)
+    if len(xy) > 1:
+        cv2.polylines(m, [xy.reshape(-1, 1, 2)], False, 255, 2 * r, cv2.LINE_AA)
+    for q in (xy[0], xy[-1]):
+        cv2.circle(m, (int(q[0]), int(q[1])), r, 255, -1, cv2.LINE_AA)
+    return R.feather(m, 0.15 * r)
 
 
 def _warp_alpha(alpha, T, shape):
@@ -43,7 +60,7 @@ def _lens_bottoms(a: np.ndarray, cx: float):
 class GlassesStep(Step):
     id = "glasses"
     title = "안경 얹기"
-    param_keys = ("glasses",)
+    param_keys = ("glasses", "glasses_strokes")
     cache = True
 
     def run(self, frame: Frame, analysis, params) -> Frame:
@@ -103,7 +120,18 @@ class GlassesStep(Step):
         # 한 번만 샘플링해서 얹기
         h, w = shape[:2]
         rgb = cv2.warpAffine(cut["rgb"], T, (w, h), flags=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_REPLICATE)
-        a = _warp_alpha(cut["alpha"], T, shape)[..., None]
+        a = _warp_alpha(cut["alpha"], T, shape)
+        strokes = params.get("glasses_strokes") or []
+        if strokes:
+            # 살리기는 안경 사진이 있는 띠 안에서만 (띠 밖은 가져올 화소가 없음)
+            valid = _warp_alpha(np.ones(cut["alpha"].shape, np.float32), T, shape)
+            for mode, radius, pts in strokes:                 # 칠한 순서대로 (나중 획이 이김)
+                if not pts:
+                    continue
+                m = stroke_mask(shape, radius, pts)
+                a = np.maximum(a, m * valid) if mode == "glasses" else a * (1.0 - m)
+            done.append(f"복원 붓 {len(strokes)}획")
+        a = a[..., None]
         out = frame.image.astype(np.float32) * (1 - a) + rgb.astype(np.float32) * a
         frame.image = np.clip(out + 0.5, 0, 255).astype(np.uint8)
         frame.outputs["glasses"] = {"moved": done, "transform": T.tolist()}

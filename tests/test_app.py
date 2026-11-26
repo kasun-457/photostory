@@ -70,3 +70,39 @@ def test_full_flow(app, hub, portrait, tmp_path, monkeypatch):
     w.next_customer()
     assert w.stack.currentWidget() is w.customer_view and w.proc.pipeline.analysis is None
     w.runner.wait(5000)
+
+
+def test_result_tools(app):
+    """결과 화면 손질 도구: 안경 복원 붓 획이 세션에 쌓이고, 쌍꺼풀 기준 눈을 바꾸면 다시 계산한다."""
+    import numpy as np
+    from PySide6.QtCore import QPoint
+    from PySide6.QtTest import QTest
+    from photostory.app.result_view import ResultView
+    from photostory.core.session import Customer, Session
+    s = Session(Customer(name="a", purposes=["passport"], glasses=True))
+    rv = ResultView()
+    rv.bind(s, [], expert=False)
+    rv.resize(900, 700)
+    rv.show()
+    rv.ret_view.set_image(np.full((400, 300, 3), 200, np.uint8))
+    app.processEvents()
+    hits = []
+    rv.params_changed.connect(hits.append)
+    assert rv.brush_cb.isVisibleTo(rv) and not rv.crease_box.isVisibleTo(rv)
+    rv.brush_cb.setChecked(True)
+    v = rv.ret_view
+    c = v.rect().center()
+    QTest.mousePress(v, Qt.MouseButton.RightButton, pos=c)
+    QTest.mouseMove(v, c + QPoint(20, 5))
+    QTest.mouseRelease(v, Qt.MouseButton.RightButton, pos=c + QPoint(20, 5))
+    QTest.mouseClick(v, Qt.MouseButton.LeftButton, pos=c + QPoint(-30, 0))
+    assert [st.mode for st in s.glasses_strokes] == ["original", "glasses"]
+    assert all(0 <= x <= 1 and 0 <= y <= 1 for st in s.glasses_strokes for x, y in st.pts)
+    rv.undo_btn.click()
+    assert len(s.glasses_strokes) == 1
+    rv.clear_btn.click()
+    assert not s.glasses_strokes and not rv.clear_btn.isEnabled()
+    rv._update_tools(crease={"왼눈": {"height": 30}, "오른눈": {"height": 40}})
+    assert rv.crease_box.isVisibleTo(rv)
+    rv.crease_box.setCurrentIndex(rv.crease_box.findData("오른눈"))
+    assert s.crease_ref == "오른눈" and hits and all(hits)

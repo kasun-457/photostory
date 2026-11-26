@@ -5,7 +5,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from photostory.core.measure.template import _jaw_neck_bend, _pair, _row_edges
+from photostory.core.measure.template import _ears, _jaw_neck_bend, _pair, _row_edges, _shadow_jaw
 from photostory.core.processor import Processor
 from photostory.core.session import Customer, Gender, Session
 from photostory.core.specs import SpecRegistry
@@ -73,5 +73,44 @@ def test_template_lines(hub, portrait):
                 l, r = line.sides
                 assert line.pos <= min(t.center_x - l, r - t.center_x) + 1e-6   # 좁은 쪽
         if g == Gender.MALE:
-            assert t.get("8") is None and any("귀" in n for n in t.notes)
+            assert t.get("8") is not None or any("귀" in n for n in t.notes)
     proc.clear()
+
+
+def _oval(cx=400, cy=300, a=150, b=200):
+    t = np.linspace(0, 2 * np.pi, 40, endpoint=False)
+    return np.stack([cx + a * np.cos(t), cy + b * np.sin(t)], axis=1).astype(np.float32)
+
+
+def test_ears_found_outside_face():
+    """얼굴 윤곽 바깥에 붙은 피부 덩어리(귀): 아래 끝과 바깥 끝."""
+    skin = np.zeros((800, 800), np.float32)
+    cv2.ellipse(skin, (400, 300), (155, 205), 0, 0, 360, 1.0, -1)
+    cv2.ellipse(skin, (245, 300), (28, 60), 0, 0, 360, 1.0, -1)     # 왼쪽 귀: 아래 끝 360, 바깥 217
+    cv2.ellipse(skin, (557, 290), (25, 55), 0, 0, 360, 1.0, -1)     # 오른쪽 귀: 아래 끝 345, 바깥 582
+    l, r = _ears(skin, _oval(), 180, 420, 300)
+    assert l is not None and r is not None
+    assert abs(l[0] - 360) <= 2 and abs(l[1] - 217) <= 2
+    assert abs(r[0] - 345) <= 2 and abs(r[1] - 582) <= 2
+    plain = np.zeros((800, 800), np.float32)
+    cv2.ellipse(plain, (400, 300), (155, 205), 0, 0, 360, 1.0, -1)
+    assert _ears(plain, _oval(), 180, 420, 300) == (None, None)    # 귀가 안 보이면 없음
+
+
+def test_shadow_jaw_upper_edge():
+    """얼굴살: 바깥 윤곽은 곧은 기둥인데, 안쪽에 턱 그림자가 있다. 그림자 '위쪽 경계'가 목 옆선과 만나는 점."""
+    h, w = 900, 800
+    union = np.zeros((h, w), np.float32)
+    union[100:, 250:551] = 1.0                                      # 볼~목이 한 줄
+    gray = np.full((h, w), 190, np.float32)
+    gray[:, :250] = gray[:, 551:] = 240
+    xs = np.arange(w)
+    top = 520 + 0.0012 * (xs - 400) ** 2                          # 그림자 위 경계: 가운데 520, 옆 547
+    for x in range(250, 551):
+        gray[int(top[x]):int(top[x]) + 60, x] = 120               # 그림자 띠 (아래로 60px)
+    b = _shadow_jaw(gray, union, 400, 420, 600, 300)
+    assert b is not None
+    xl, xr, y = b
+    assert abs(xl - 259) <= 3 and abs(xr - 541) <= 3
+    exp = 520 + 0.0012 * (259 - 400) ** 2
+    assert abs(y - exp) <= 4, (y, exp)                             # 어두운 가운데(+30)가 아니라 위 경계

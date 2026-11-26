@@ -8,6 +8,7 @@ from ..core.pipeline import Step
 from .a4 import A4Step
 from .catchlight import CatchlightStep
 from .crease import CreaseStep
+from .finish import FinishStep
 from .background import BackgroundStep
 from .glasses import GlassesStep
 from .guides import GuidesStep
@@ -33,6 +34,7 @@ def default_steps() -> list[Step]:
         ToneStep(),        # 7 (규칙 방식: 액션 '닷징버닝')
         NoseShadowStep(),  # 7-1 (§8-7 콧볼 옆 그림자)
         SymmetryStep(),    # 8 (§9 유동화 + 부분 이동)
+        FinishStep(),      # 8-1 (§9-5 마무리 유동화: 눈썹 높이, 볼 좌우, 머리 윤곽)
         CreaseStep(),      # 9 (§5-3 쌍꺼풀 좌우, 기준 눈은 또렷한 쪽/지정)
         NeckStep(),        # 10 (§10 목 20px 미만 유동화 / 이상 몸 회전)
         HairTidyStep(),    # 11 (§11-3 잔머리. 핀·머리끈은 아직)
