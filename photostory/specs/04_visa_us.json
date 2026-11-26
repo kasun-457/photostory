@@ -1,0 +1,20 @@
+{
+ "id": "visa_us",
+ "order": 4,
+ "name": "미국 비자",
+ "a4_label": "미국 비자",
+ "file_label": "미국비자",
+ "size_cm": [
+  5.08,
+  5.08
+ ],
+ "dpi": 300,
+ "head_cm": 3.3,
+ "top_cm": 0.15,
+ "chin_margin_cm": 0.1,
+ "background": "#ffffff",
+ "a4_count": 3,
+ "aliases": [
+  "미국비자"
+ ]
+}

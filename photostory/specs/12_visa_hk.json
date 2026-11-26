@@ -1,0 +1,20 @@
+{
+ "id": "visa_hk",
+ "order": 12,
+ "name": "홍콩 비자",
+ "a4_label": "홍콩 비자",
+ "file_label": "홍콩비자",
+ "size_cm": [
+  4,
+  5
+ ],
+ "dpi": 300,
+ "head_cm": 3.5,
+ "top_cm": 0.51,
+ "chin_margin_cm": 0.1,
+ "background": "#ffffff",
+ "a4_count": 4,
+ "aliases": [
+  "홍콩비자"
+ ]
+}

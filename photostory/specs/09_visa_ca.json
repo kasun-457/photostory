@@ -1,0 +1,20 @@
+{
+ "id": "visa_ca",
+ "order": 9,
+ "name": "캐나다 비자",
+ "a4_label": "캐나다 비자",
+ "file_label": "캐나다비자",
+ "size_cm": [
+  5,
+  7
+ ],
+ "dpi": 300,
+ "head_cm": 3.2,
+ "top_cm": 1.0,
+ "chin_margin_cm": 0.1,
+ "background": "#ffffff",
+ "a4_count": 3,
+ "aliases": [
+  "캐나다비자"
+ ]
+}

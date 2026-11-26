@@ -1,0 +1,20 @@
+{
+ "id": "visa_vn",
+ "order": 10,
+ "name": "베트남 비자",
+ "a4_label": "베트남 비자",
+ "file_label": "베트남비자",
+ "size_cm": [
+  4,
+  6
+ ],
+ "dpi": 300,
+ "head_cm": 3.4,
+ "top_cm": 0.26,
+ "chin_margin_cm": 0.1,
+ "background": "#ffffff",
+ "a4_count": 4,
+ "aliases": [
+  "베트남비자"
+ ]
+}

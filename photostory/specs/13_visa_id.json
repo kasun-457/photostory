@@ -1,0 +1,20 @@
+{
+ "id": "visa_id",
+ "order": 13,
+ "name": "인도네시아 비자",
+ "a4_label": "인도네시아 비자",
+ "file_label": "인도네시아비자",
+ "size_cm": [
+  4,
+  6
+ ],
+ "dpi": 300,
+ "head_cm": 3.4,
+ "top_cm": 0.26,
+ "chin_margin_cm": 0.1,
+ "background": "#f1191a",
+ "a4_count": 4,
+ "aliases": [
+  "인도네시아비자"
+ ]
+}
