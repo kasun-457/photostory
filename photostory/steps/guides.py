@@ -1,10 +1,12 @@
-"""2. 안내선 계산 (가이드 §5 일부, §15-2). 0단계는 전송 배치에 필요한 값만 계산한다.
+"""2. 안내선 계산 (가이드 §5, §15-2).
 
-남녀 템플릿 전체(§5-1·§5-2)는 1단계 정밀 측정에서 추가한다.
+- 전송 배치에 쓰는 값: 중심선, 정수리, 턱, 눈 높이 (outputs["guides"])
+- 남녀 템플릿 안내선 (§5-1·§5-2, core/measure/template.py): outputs["template"]
 """
 from __future__ import annotations
 
 from ..core.measure.basic import center_x, crown_y, face_width
+from ..core.measure.template import measure_template
 from ..core.pipeline import Frame, Step
 
 
@@ -12,6 +14,7 @@ class GuidesStep(Step):
     id = "guides"
     title = "안내선 계산"
     optional = False
+    param_keys = ("gender",)
 
     def run(self, frame: Frame, analysis, params) -> Frame:
         p = frame.points
@@ -28,4 +31,10 @@ class GuidesStep(Step):
         frame.outputs["guides"] = {
             "center_x": cx, "crown_y": float(crown), "chin_y": float(chin), "eye_y": eye_y,
         }
+        try:
+            t = measure_template(frame, params.get("gender", "여"))
+            frame.outputs["template"] = t
+            frame.notes += [f"안내선: {n}" for n in t.notes]
+        except Exception as e:  # 안내선은 표시·측정용이라 실패해도 출력은 계속한다
+            frame.notes.append(f"안내선: 템플릿 측정 실패 ({e})")
         return frame

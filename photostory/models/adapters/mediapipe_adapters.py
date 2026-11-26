@@ -32,7 +32,26 @@ FACE_MESH_INDEX = {
     "왼턱끝쪽": 149, "오른턱끝쪽": 378,
     "왼얼굴_옆": 234, "오른얼굴_옆": 454,
     "턱끝": 152, "이마_위": 10,
+    "윗입술_안쪽": 13, "아랫입술_안쪽": 14,
 }
+
+# 홍채 둘레 4점 (중심 468 → 469~472, 중심 473 → 474~477). 위·아래·좌우는 좌표로 가른다.
+IRIS_RING = {"왼눈": (468, [469, 470, 471, 472]), "오른눈": (473, [474, 475, 476, 477])}
+
+
+def _iris_points(pts: np.ndarray) -> dict[str, tuple[float, float]]:
+    out = {}
+    if len(pts) < 478:
+        return out
+    for eye, (_, ring) in IRIS_RING.items():
+        r = pts[ring]
+        top, bottom = r[np.argmin(r[:, 1])], r[np.argmax(r[:, 1])]
+        left, right = r[np.argmin(r[:, 0])], r[np.argmax(r[:, 0])]
+        inner, outer = (right, left) if eye == "왼눈" else (left, right)   # 코 쪽이 안쪽
+        for k, v in (("홍채위", top), ("홍채아래", bottom), ("홍채안쪽", inner), ("홍채바깥", outer)):
+            out[f"{eye}_{k}"] = (float(v[0]), float(v[1]))
+    return out
+
 
 # 얼굴 부위 영역. MediaPipe 이름의 RIGHT_* 는 손님 기준이라 사진 왼쪽이다.
 FACE_REGION_INDEX = {
@@ -122,6 +141,7 @@ class MediaPipeFace(_MPBase, FaceLandmarks):
         faces = [np.array([[p.x * w, p.y * h] for p in lm], np.float64) for lm in res.face_landmarks]
         pts = max(faces, key=lambda a: np.ptp(a[:, 0]) * np.ptp(a[:, 1])) / s
         named = {k: (float(pts[i, 0]), float(pts[i, 1])) for k, i in FACE_MESH_INDEX.items() if i < len(pts)}
+        named.update(_iris_points(pts))
         regions = {k: pts[idx].astype(np.float32) for k, idx in FACE_REGION_INDEX.items()
                    if max(idx) < len(pts)}
         return FaceResult(named, 1.0, pts, {"faces": len(faces)}, regions)

@@ -12,6 +12,7 @@ from .widgets.common import FineSlider, ImageView, StrengthPanel
 
 GREEN, ORANGE = "#2e7d32", "#e65100"
 C_CROWN, C_CHIN, C_CENTER, C_EYE = QColor(0, 160, 255), QColor(255, 60, 60), QColor(0, 200, 120), QColor(255, 170, 0)
+C_GUIDE_SOFT, C_TEMPLATE_V = QColor(255, 170, 0, 140), QColor(200, 0, 160)
 
 
 class PlacementPanel(QWidget):
@@ -227,9 +228,19 @@ class ResultView(QWidget):
                 v.set_guides()
             return
         g = f.outputs["guides"]
-        self.ret_view.set_guides(
-            h=[(g["crown_y"], C_CROWN, "정수리"), (g["chin_y"], C_CHIN, "턱"), (g["eye_y"], C_EYE, "")],
-            v=[(g["center_x"], C_CENTER, "")])
+        h = [(g["crown_y"], C_CROWN, "정수리")]
+        v = [(g["center_x"], C_CENTER, "")]
+        t = f.outputs.get("template")
+        if t is not None:
+            # 가이드 §5 템플릿 (여: A~K·색 이름 / 남: 1~12·A~F). 사진에서 다시 찾은 선은 진하게
+            h += [(l.pos, C_EYE if l.basis == "영상" else C_GUIDE_SOFT, l.id) for l in t.h]
+            for l in t.v:
+                if l.id in ("중심", "A"):
+                    continue
+                v += [(x, C_TEMPLATE_V, l.id) for x in t.v_x(l)]
+        else:
+            h += [(g["chin_y"], C_CHIN, "턱"), (g["eye_y"], C_EYE, "")]
+        self.ret_view.set_guides(h=h, v=v)
         for s in self.specs:
             v = self.transfer_views.get(s.id)
             if v:

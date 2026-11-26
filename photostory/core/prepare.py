@@ -15,7 +15,7 @@ import numpy as np
 from ..models.hub import ModelHub
 from ..models.roles import REQUIRED_POINTS, FaceLandmarks, PersonSegmentation
 from .io.imageio import read_image
-from .measure import basic, spots
+from .measure import basic, eyes, spots
 from .pipeline import Analysis, CancelToken
 
 log = logging.getLogger(__name__)
@@ -74,6 +74,15 @@ def analyze(path: Path | str, hub: ModelHub, token: CancelToken | None = None,
     skin = basic.clean_confidence(seg.face_skin) if seg.face_skin is not None else None
     a = Analysis(image=rgb, points=dict(face.points), person_mask=person, hair_mask=hair,
                  confidence={"face": face.confidence}, skin_mask=skin, regions=dict(face.regions))
+    if seg.body_skin is not None:
+        a.masks["몸피부"] = basic.clean_confidence(seg.body_skin)
+    t0 = time.perf_counter()                                             # P3: 눈 꼭짓점·밑라인
+    ey = eyes.measure_eyes(rgb, a.points)
+    a.points.update(ey["points"])
+    a.extra["level"] = ey["level"]
+    t["eyes"] = time.perf_counter() - t0
+    token.check()
+
     t0 = time.perf_counter()                                             # P4 (규칙 방식): 남길 점
     a.extra["spots"] = spots.find_spots(rgb, a.points, a.regions, skin)
     kept = [sp for sp in a.extra["spots"] if sp.keep]

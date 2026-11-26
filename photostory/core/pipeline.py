@@ -56,6 +56,7 @@ class Analysis:
     confidence: dict[str, float] = field(default_factory=dict)
     skin_mask: np.ndarray | None = None         # 얼굴 피부 float32 0~1 (분할 모델)
     regions: dict[str, np.ndarray] = field(default_factory=dict)  # 얼굴 부위 다각형 (models/roles.py)
+    masks: dict[str, np.ndarray] = field(default_factory=dict)    # 그 밖의 분할 (예: "몸피부") float32 0~1
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -76,11 +77,12 @@ class Frame:
     notes: list[str] = field(default_factory=list)          # 건너뛴 단계, 남겨 둔 점
     skin_mask: np.ndarray | None = None
     regions: dict[str, np.ndarray] = field(default_factory=dict)
+    masks: dict[str, np.ndarray] = field(default_factory=dict)
 
     def copy(self) -> "Frame":
         return Frame(self.image, dict(self.points), self.person_mask, self.hair_mask,
                      self.scale, dict(self.outputs), list(self.notes), self.skin_mask,
-                     dict(self.regions))
+                     dict(self.regions), dict(self.masks))
 
     def px(self, v: float) -> float:
         """원본 해상도 기준 px 값을 현재 해상도로."""
@@ -107,6 +109,7 @@ class Frame:
         f = self.copy()
         f.image, f.points, f.person_mask, f.hair_mask = img, pts, wm(self.person_mask), wm(self.hair_mask)
         f.skin_mask, f.regions = wm(self.skin_mask), regs
+        f.masks = {k: wm(v) for k, v in self.masks.items()}
         return f
 
 
@@ -214,7 +217,8 @@ class Pipeline:
             img, pm, hm, sm = a.image, a.person_mask, a.hair_mask, a.skin_mask
         pts = {k: (x * s, y * s) for k, (x, y) in a.points.items()}
         regs = {k: (v * s).astype(np.float32) for k, v in a.regions.items()}
-        f = Frame(img, pts, pm, hm, s, skin_mask=sm, regions=regs)
+        ms = {k: (v if s >= 1.0 else rs(v)) for k, v in a.masks.items()}
+        f = Frame(img, pts, pm, hm, s, skin_mask=sm, regions=regs, masks=ms)
         self._base[key] = f
         return f
 

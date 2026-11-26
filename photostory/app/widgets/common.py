@@ -72,6 +72,8 @@ class ImageView(QWidget):
             p.setPen(QPen(c, 1))
             xx = r.left() + x * s
             p.drawLine(int(xx), int(r.top()), int(xx), int(r.bottom()))
+            if label:
+                p.drawText(int(xx) + 3, int(r.bottom()) - 4, label)
 
 
 class FineSlider(QWidget):
