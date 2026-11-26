@@ -1,0 +1,238 @@
+"""④ 결과 화면 (설계서 1절 ④, 2-3, 2-4)."""
+from __future__ import annotations
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QGroupBox, QHBoxLayout, QLabel, QPushButton,
+                               QScrollArea, QSplitter, QTabWidget, QVBoxLayout, QWidget)
+
+from ..core.session import Session
+from ..core.specs import Spec
+from .widgets.common import FineSlider, ImageView, StrengthPanel
+
+GREEN, ORANGE = "#2e7d32", "#e65100"
+C_CROWN, C_CHIN, C_CENTER, C_EYE = QColor(0, 160, 255), QColor(255, 60, 60), QColor(0, 200, 120), QColor(255, 170, 0)
+
+
+class PlacementPanel(QWidget):
+    """증명사진 배치 미세 조정 (설계서 2-4). 규격마다 따로."""
+    changed = Signal(bool)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.session: Session | None = None
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        self.spec_box = QComboBox()
+        self.spec_box.currentIndexChanged.connect(self._load)
+        lay.addWidget(self.spec_box)
+        self.size = FineSlider("얼굴 크기", 0, -10, 10, ticks=[0])
+        self.shift = FineSlider("위아래", 0, -50, 50, ticks=[0])   # 0.1% 단위
+        self.chin = FineSlider("턱 위치", 0, 0, 100, ticks=[0, 100])
+        self.size.spin.setSuffix("%")
+        self.shift.spin.setSuffix("‰")
+        self.chin.spin.setSuffix("")
+        self.chin.setToolTip("0 = 턱 최소선, 100 = 턱 최대선 (머리 볼륨이 클수록 최대선 쪽)")
+        for s in (self.size, self.shift, self.chin):
+            lay.addWidget(s)
+            s.valueChanged.connect(lambda _v: self._save(False))
+            s.committed.connect(lambda _v: self._save(True))
+
+    def bind(self, session: Session, specs: list[Spec]) -> None:
+        self.session = session
+        self.spec_box.blockSignals(True)
+        self.spec_box.clear()
+        for s in specs:
+            self.spec_box.addItem(s.name, s.id)
+        self.spec_box.blockSignals(False)
+        self._load()
+
+    def _sid(self) -> str | None:
+        return self.spec_box.currentData()
+
+    def _load(self) -> None:
+        if not self.session or not self._sid():
+            return
+        pl = self.session.placement(self._sid())
+        self.size.setValue(round(pl.scale * 100))
+        self.shift.setValue(round(pl.shift * 1000))
+        self.chin.setValue(round(pl.chin_bias * 100))
+
+    def _save(self, final: bool) -> None:
+        if not self.session or not self._sid():
+            return
+        pl = self.session.placement(self._sid())
+        pl.scale = self.size.value() / 100
+        pl.shift = self.shift.value() / 1000
+        pl.chin_bias = self.chin.value() / 100
+        self.changed.emit(final)
+
+
+class ResultView(QWidget):
+    params_changed = Signal(bool)    # True = 손을 뗌 (원본 해상도까지)
+    export_clicked = Signal()
+    next_customer = Signal()
+    back_clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.session: Session | None = None
+        self.specs: list[Spec] = []
+        self._last = None
+
+        outer = QVBoxLayout(self)
+        top = QHBoxLayout()
+        self.title = QLabel("④ 결과")
+        self.title.setObjectName("title")
+        self.status = QLabel("")
+        self.guides_cb = QCheckBox("안내선 보기")
+        self.guides_cb.toggled.connect(lambda _c: self._draw_guides())
+        top.addWidget(self.title)
+        top.addStretch()
+        top.addWidget(self.status)
+        top.addWidget(self.guides_cb)
+        outer.addLayout(top)
+
+        split = QSplitter(Qt.Orientation.Horizontal)
+        left = QWidget()
+        ll = QVBoxLayout(left)
+        ll.setContentsMargins(0, 0, 0, 0)
+        cmp_row = QHBoxLayout()
+        self.orig_view = ImageView("원본")
+        self.ret_view = ImageView("수정본")
+        for name, v in (("원본", self.orig_view), ("수정본", self.ret_view)):
+            box = QVBoxLayout()
+            box.addWidget(QLabel(name), 0, Qt.AlignmentFlag.AlignHCenter)
+            box.addWidget(v, 1)
+            cmp_row.addLayout(box, 1)
+        ll.addLayout(cmp_row, 3)
+        self.tabs = QTabWidget()
+        ll.addWidget(self.tabs, 2)
+        self.fit = QLabel("")
+        self.fit.setTextFormat(Qt.TextFormat.RichText)
+        self.notes = QLabel("")
+        self.notes.setWordWrap(True)
+        self.notes.setStyleSheet("color:#666")
+        ll.addWidget(self.fit)
+        ll.addWidget(self.notes)
+        split.addWidget(left)
+
+        self.expert = QScrollArea()
+        self.expert.setWidgetResizable(True)
+        ew = QWidget()
+        el = QVBoxLayout(ew)
+        g1 = QGroupBox("부위별 강도")
+        g1l = QVBoxLayout(g1)
+        self.strength_panel: StrengthPanel | None = None
+        self._strength_holder = g1l
+        g2 = QGroupBox("증명사진 배치 미세 조정")
+        g2l = QVBoxLayout(g2)
+        self.placement = PlacementPanel()
+        self.placement.changed.connect(self.params_changed)
+        g2l.addWidget(self.placement)
+        el.addWidget(g1)
+        el.addWidget(g2)
+        el.addStretch()
+        self.expert.setWidget(ew)
+        self.expert.setMinimumWidth(360)
+        split.addWidget(self.expert)
+        split.setStretchFactor(0, 3)
+        split.setStretchFactor(1, 1)
+        outer.addWidget(split, 1)
+
+        btns = QHBoxLayout()
+        back = QPushButton("← 사진 다시 고르기")
+        back.clicked.connect(self.back_clicked)
+        self.export_btn = QPushButton("출력")
+        self.export_btn.setObjectName("primary")
+        self.export_btn.setMinimumHeight(40)
+        self.export_btn.clicked.connect(self.export_clicked)
+        nxt = QPushButton("다음 손님 →")
+        nxt.setMinimumHeight(40)
+        nxt.clicked.connect(self.next_customer)
+        btns.addWidget(back)
+        btns.addStretch()
+        btns.addWidget(self.export_btn)
+        btns.addWidget(nxt)
+        outer.addLayout(btns)
+
+        self.transfer_views: dict[str, ImageView] = {}
+        self.a4_view = ImageView("A4")
+
+    # ---------------------------------------------------------------- 설정
+    def bind(self, session: Session, specs: list[Spec], expert: bool) -> None:
+        self.session, self.specs = session, specs
+        self.title.setText(f"④ 결과 — {session.customer.name}")
+        self.expert.setVisible(expert)
+        if self.strength_panel is None:
+            self.strength_panel = StrengthPanel(session.customer.strength)
+            self.strength_panel.changed.connect(self.params_changed)
+            self._strength_holder.addWidget(self.strength_panel)
+        else:
+            self.strength_panel.bind(session.customer.strength)
+        self.placement.bind(session, specs)
+        self.tabs.clear()
+        self.transfer_views = {}
+        for s in specs:
+            v = ImageView(s.name)
+            self.transfer_views[s.id] = v
+            self.tabs.addTab(v, f"전송 · {s.name}")
+        self.tabs.addTab(self.a4_view, "A4")
+        self.orig_view.set_image(None)
+        self.ret_view.set_image(None)
+        self.a4_view.set_image(None)
+        self.fit.clear()
+        self.notes.clear()
+        self._last = None
+
+    def set_busy(self, text: str) -> None:
+        self.status.setText(text)
+
+    def set_original(self, rgb) -> None:
+        self.orig_view.set_image(rgb)
+
+    # ---------------------------------------------------------------- 결과 표시
+    def show_result(self, frame, full: bool) -> None:
+        out = frame.outputs
+        if not full:  # 수정본은 미리보기 해상도로 보여 준다 (원본 해상도는 출력에만 씀)
+            self.ret_view.set_image(out.get("retouched"))
+            self._last = frame
+        for sid, img in out.get("transfers", {}).items():
+            if sid in self.transfer_views:
+                self.transfer_views[sid].set_image(img)
+        if "a4" in out:
+            self.a4_view.set_image(out["a4"])
+        self._show_fit(out.get("transfer_checks", {}))
+        notes = [n for n in frame.notes]
+        self.notes.setText(" · ".join(notes))
+        self._draw_guides()
+
+    def _show_fit(self, checks) -> None:
+        parts = []
+        for s in self.specs:
+            c = checks.get(s.id)
+            if c is None:
+                continue
+            color = GREEN if c.ok else ORANGE
+            parts.append(f"<span style='color:{color}'>{s.name}: 턱끝~정수리 {c.head_cm:.2f}cm "
+                         f"(목표 {s.head_cm:g}cm)</span>")
+        self.fit.setText(" &nbsp;|&nbsp; ".join(parts))
+
+    def _draw_guides(self) -> None:
+        on = self.guides_cb.isChecked()
+        f = self._last
+        if not on or f is None or "guides" not in f.outputs:
+            self.ret_view.set_guides()
+            for v in self.transfer_views.values():
+                v.set_guides()
+            return
+        g = f.outputs["guides"]
+        self.ret_view.set_guides(
+            h=[(g["crown_y"], C_CROWN, "정수리"), (g["chin_y"], C_CHIN, "턱"), (g["eye_y"], C_EYE, "")],
+            v=[(g["center_x"], C_CENTER, "")])
+        for s in self.specs:
+            v = self.transfer_views.get(s.id)
+            if v:
+                v.set_guides(h=[(s.crown_line, C_CROWN, ""), (s.chin_min_line, C_CHIN, ""),
+                                (s.chin_max_line, C_CHIN, "")],
+                             v=[(s.center_x, C_CENTER, "")])

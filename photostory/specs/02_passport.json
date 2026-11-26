@@ -1,0 +1,28 @@
+{
+ "id": "passport",
+ "order": 2,
+ "name": "여권/운전면허",
+ "a4_label": "여권/운전면허",
+ "file_label": "여권",
+ "size_cm": [
+  3.5,
+  4.5
+ ],
+ "dpi": 300,
+ "head_cm": 3.3,
+ "top_cm": 0.15,
+ "chin_margin_cm": 0.1,
+ "background": "#ffffff",
+ "a4_count": 5,
+ "aliases": [
+  "여권",
+  "운전면허",
+  "면허증"
+ ],
+ "override_px": {
+  "crown": 15.4,
+  "chin_min": 405.6,
+  "chin_max": 417.4
+ },
+ "note": "가이드 §15-1: 실제 작업 템플릿 값 그대로"
+}

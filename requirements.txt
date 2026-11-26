@@ -1,0 +1,8 @@
+PySide6>=6.7
+numpy>=1.26
+opencv-python-headless>=4.9
+Pillow>=10.0
+PyYAML>=6.0
+mediapipe>=0.10.14
+# RAW 현상 (선택)
+rawpy>=0.21

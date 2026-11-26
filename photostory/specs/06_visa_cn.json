@@ -1,0 +1,20 @@
+{
+ "id": "visa_cn",
+ "order": 6,
+ "name": "중국 비자",
+ "a4_label": "중국 비자",
+ "file_label": "중국비자",
+ "size_cm": [
+  3.3,
+  4.8
+ ],
+ "dpi": 300,
+ "head_cm": 3.0,
+ "top_cm": 0.3,
+ "chin_margin_cm": 0.1,
+ "background": "#ffffff",
+ "a4_count": 5,
+ "aliases": [
+  "중국비자"
+ ]
+}

@@ -1,0 +1,20 @@
+{
+ "id": "toeic",
+ "order": 3,
+ "name": "토익",
+ "a4_label": "토익",
+ "file_label": "토익",
+ "size_cm": [
+  3,
+  4
+ ],
+ "dpi": 300,
+ "head_cm": 3.2,
+ "top_cm": 0.17,
+ "chin_margin_cm": 0.1,
+ "background": "#ffffff",
+ "a4_count": 6,
+ "aliases": [
+  "TOEIC"
+ ]
+}

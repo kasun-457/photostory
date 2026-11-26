@@ -1,0 +1,20 @@
+{
+ "id": "visa_jp",
+ "order": 7,
+ "name": "일본 비자",
+ "a4_label": "일본 비자",
+ "file_label": "일본비자",
+ "size_cm": [
+  4.5,
+  4.5
+ ],
+ "dpi": 300,
+ "head_cm": 3.2,
+ "top_cm": 0.2,
+ "chin_margin_cm": 0.1,
+ "background": "#ffffff",
+ "a4_count": 4,
+ "aliases": [
+  "일본비자"
+ ]
+}

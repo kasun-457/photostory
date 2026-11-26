@@ -1,0 +1,20 @@
+{
+ "id": "visa_in",
+ "order": 5,
+ "name": "인도 비자",
+ "a4_label": "인도 비자",
+ "file_label": "인도비자",
+ "size_cm": [
+  5.08,
+  5.08
+ ],
+ "dpi": 300,
+ "head_cm": 3.5,
+ "top_cm": 0.23,
+ "chin_margin_cm": 0.1,
+ "background": "#ffffff",
+ "a4_count": 3,
+ "aliases": [
+  "인도비자"
+ ]
+}
