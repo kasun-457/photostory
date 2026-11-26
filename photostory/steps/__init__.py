@@ -9,6 +9,7 @@ from .a4 import A4Step
 from .catchlight import CatchlightStep
 from .background import BackgroundStep
 from .guides import GuidesStep
+from .hair import HairBrightnessStep, HairTidyStep
 from .level import LevelStep
 from .neck import NeckStep
 from .sharpen import SharpenStep
@@ -30,9 +31,10 @@ def default_steps() -> list[Step]:
         SymmetryStep(),    # 8 (§9 유동화 + 부분 이동)
         # 9: 쌍꺼풀 (2단계)
         NeckStep(),        # 10 (§10 목 20px 미만 유동화 / 이상 몸 회전)
-        # 11~12: 머리카락·안경 (2단계)
+        HairTidyStep(),    # 11 (§11-3 잔머리. 핀·머리끈은 아직)
+        # 12: 안경 (2단계)
         BackgroundStep(),   # 13
-        # 14: 머리카락 밝기 (2단계)
+        HairBrightnessStep(),  # 14 (§13 너무 밝을 때만)
         ShoulderStep(),    # 15 (§14 규격별 트리밍 경계에서 어깨 높이)
         TransferStep(),     # 16 (수정본은 이 단계 직전 이미지)
         A4Step(),           # 17
