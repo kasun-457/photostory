@@ -15,7 +15,7 @@ import numpy as np
 from ..models.hub import ModelHub
 from ..models.roles import REQUIRED_POINTS, FaceLandmarks, PersonSegmentation
 from .io.imageio import read_image
-from .measure import basic
+from .measure import basic, spots
 from .pipeline import Analysis, CancelToken
 
 log = logging.getLogger(__name__)
@@ -71,8 +71,15 @@ def analyze(path: Path | str, hub: ModelHub, token: CancelToken | None = None,
     hair = basic.refine_mask(rgb, seg.hair) if seg.hair is not None else None
     t["refine"] = time.perf_counter() - t0
 
+    skin = basic.clean_confidence(seg.face_skin) if seg.face_skin is not None else None
     a = Analysis(image=rgb, points=dict(face.points), person_mask=person, hair_mask=hair,
-                 confidence={"face": face.confidence})
+                 confidence={"face": face.confidence}, skin_mask=skin, regions=dict(face.regions))
+    t0 = time.perf_counter()                                             # P4 (규칙 방식): 남길 점
+    a.extra["spots"] = spots.find_spots(rgb, a.points, a.regions, skin)
+    kept = [sp for sp in a.extra["spots"] if sp.keep]
+    a.regions["보존점"] = np.array([[sp.x, sp.y] for sp in kept], np.float32).reshape(-1, 2)
+    a.extra["보존점_r"] = [sp.r for sp in kept]
+    t["spots"] = time.perf_counter() - t0
     a.extra["timings"] = t
     a.extra["face_count"] = face.extra.get("faces", 1)
     log.info("prepare %s", {k: round(v * 1000) for k, v in t.items()})

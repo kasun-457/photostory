@@ -17,3 +17,4 @@ samples/
 !photostory/app/resources/*.png
 build/
 dist/
+.venv/

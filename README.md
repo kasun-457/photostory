@@ -15,6 +15,15 @@ python -m photostory
 
 Linux에서는 MediaPipe용 `libegl1`이 필요합니다 (`apt-get install libegl1`).
 
+Windows (PowerShell):
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\python -m pip install -r requirements-dev.txt
+.venv\Scripts\python tools\fetch_models.py
+.venv\Scripts\python -m photostory
+```
+
 ## 테스트
 
 ```bash

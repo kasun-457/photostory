@@ -12,7 +12,7 @@ from ..steps import default_steps
 from ..steps.background import background_rgb_for
 from .pipeline import Analysis, CancelToken, Pipeline, RenderParams, RenderResult
 from .prepare import analyze
-from .session import Session
+from .session import PARTS, Session
 from .specs import Spec, SpecRegistry
 
 
@@ -94,6 +94,8 @@ class Processor:
                 "gender": c.gender.value,
                 "glasses": c.glasses,
                 "strength": dict(c.strength.values),
+                # 단계는 자기 부위 키만 param_keys에 넣는다 → 다른 부위를 바꾸면 다시 계산하지 않음
+                **{f"strength.{k}": round(c.strength.get(k), 2) for k in PARTS},
                 "specs": specs,
                 "placements": {s.id: session.placement(s.id) for s in specs},
                 "bg_color": background_rgb_for(specs) if specs else (255, 255, 255),
