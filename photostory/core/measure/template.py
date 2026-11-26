@@ -227,6 +227,14 @@ def _pair(cx: float, l: float | None, r: float | None) -> tuple[float, tuple[flo
 
 # ------------------------------------------------------------ 템플릿
 
+def eye_opening(p, e: str) -> tuple[float, float]:
+    """(눈동자 위 = 윗눈꺼풀이 홍채를 가리는 곳, 눈동자 아래 = 아랫눈꺼풀 밑라인) y."""
+    up = max(p.get(f"{e}_홍채위", p[f"{e}_윗꺼풀"])[1], p[f"{e}_윗꺼풀"][1])
+    lo = p.get(f"{e}_밑라인", p.get(f"{e}_홍채아래", p[f"{e}_아랫꺼풀"]))[1]
+    return up, lo
+
+
+
 def measure_template(frame, gender: str) -> Template:
     p, regs = frame.points, frame.regions
     gray = cv2.cvtColor(frame.image, cv2.COLOR_RGB2GRAY).astype(np.float32)
@@ -237,11 +245,7 @@ def measure_template(frame, gender: str) -> Template:
 
     # ---- 가로선
     brows = _brow_lines(gray, regs, fw)
-    eyes = {}
-    for e in ("왼눈", "오른눈"):
-        up = max(p.get(f"{e}_홍채위", p[f"{e}_윗꺼풀"])[1], p[f"{e}_윗꺼풀"][1])
-        lo = p.get(f"{e}_밑라인", p.get(f"{e}_홍채아래", p[f"{e}_아랫꺼풀"]))[1]
-        eyes[e] = (up, lo)
+    eyes = {e: eye_opening(p, e) for e in ("왼눈", "오른눈")}
     big = max(eyes, key=lambda e: eyes[e][1] - eyes[e][0])     # 눈 큰 쪽 우선 (§5-2)
     corner_y = (p["왼눈_바깥꼭짓점"][1] + p["오른눈_바깥꼭짓점"][1]) / 2
     nostril, nb = _nostril_top(gray, regs, p)

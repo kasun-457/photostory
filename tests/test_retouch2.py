@@ -46,7 +46,7 @@ def test_sharpen_only_when_soft(hub, portrait):
     # 흐림 → 함, 눈 둘레가 또렷해짐
     soft = cv2.GaussianBlur(portrait, (0, 0), 2)
     s = _session(soft, "b")
-    s.disabled_steps = {"skin", "tone", "catchlight", "level"}
+    s.disabled_steps = {"skin", "tone", "catchlight", "level", "symmetry"}
     proc.start(s)
     on = proc.render(s, preview=False).frame
     assert any("선명하게: 함" in n for n in on.notes)
@@ -87,7 +87,7 @@ def test_catchlight_fixed(hub, portrait, glared):
     img, c, r = glared
     proc = Processor(hub, SpecRegistry())
     s = _session(img, "c")
-    s.disabled_steps = {"skin", "tone", "sharpen", "level"}
+    s.disabled_steps = {"skin", "tone", "sharpen", "level", "symmetry"}
     proc.start(s)
     f = proc.render(s, preview=False).frame
     out = f.outputs["retouched"]

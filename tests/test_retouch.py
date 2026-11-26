@@ -64,7 +64,7 @@ def test_skin_keeps_mole_removes_trouble(hub, spotted, tmp_path):
     img, mole, pimple = spotted
     proc = Processor(hub, SpecRegistry())
     s = _session(tmp_path, img)
-    s.disabled_steps = {"level", "tone"}              # 좌표가 바뀌지 않게 수평은 끈다
+    s.disabled_steps = {"level", "tone", "symmetry"}            # 좌표가 바뀌지 않게 수평은 끈다
     proc.start(s)
     out = proc.render(s, preview=False).frame
     ret = out.outputs["retouched"]
@@ -111,10 +111,10 @@ def test_strength_zero_and_isolation(hub, portrait, tmp_path):
 def test_tone_brightens_bridge_darkens_jaw(hub, portrait, tmp_path):
     proc = Processor(hub, SpecRegistry())
     s = _session(tmp_path, portrait)
-    s.disabled_steps = {"level", "skin"}
+    s.disabled_steps = {"level", "skin", "symmetry"}
     proc.start(s)
     on = proc.render(s, preview=False).frame
-    s.disabled_steps = {"level", "skin", "tone"}
+    s.disabled_steps = {"level", "skin", "tone", "symmetry"}
     off = proc.render(s, preview=False).frame
     a, b = on.outputs["retouched"], off.outputs["retouched"]
     bridge = on.regions["콧대"][2]
