@@ -161,6 +161,7 @@ class Pipeline:
     def __init__(self, steps: list[Step]):
         self.steps = steps
         self._lock = threading.Lock()
+        self._render_locks = {"preview": threading.Lock(), "full": threading.Lock()}
         self._generation = 0
         # scale별 캐시: [(누적키, Frame)] — 단계 순서대로
         self._cache: dict[str, list[tuple[str, Frame | None]]] = {}
@@ -212,10 +213,16 @@ class Pipeline:
     def render(self, params: RenderParams, preview: bool, token: CancelToken | None = None,
                generation: int | None = None,
                progress: Callable[[str, int, int], None] | None = None) -> RenderResult:
+        ckey = "preview" if preview else "full"
+        with self._render_locks[ckey]:
+            return self._render(params, preview, ckey, token, generation, progress)
+
+    def _render(self, params, preview, ckey, token, generation, progress) -> RenderResult:
         token = token or CancelToken()
         gen = self._generation if generation is None else generation
+        if not self.is_current(gen):
+            raise Cancelled()
         frame = self._base_frame(preview)
-        ckey = "preview" if preview else "full"
         cache = self._cache.setdefault(ckey, [])
         timings: dict[str, float] = {}
         active = [s for s in self.steps if not (s.optional and s.id in params.disabled)]

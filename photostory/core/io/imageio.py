@@ -129,3 +129,28 @@ def make_thumbnail(rgb: np.ndarray, max_side: int) -> np.ndarray:
     if s >= 1:
         return rgb
     return cv2.resize(rgb, (max(1, round(w * s)), max(1, round(h * s))), interpolation=cv2.INTER_AREA)
+
+
+def read_thumbnail(path: str | os.PathLike, max_side: int = 600) -> np.ndarray:
+    """업로드 칸 미리보기용 빠른 읽기. JPEG는 축소 디코딩(draft)을 써서 원본을 다 풀지 않는다."""
+    p = Path(path)
+    if p.suffix.lower() in RAW_EXTS:
+        try:
+            import rawpy
+            with open(p, "rb") as f, rawpy.imread(f) as raw:
+                th = raw.extract_thumb()
+            if th.format == rawpy.ThumbFormat.JPEG:
+                with Image.open(io.BytesIO(th.data)) as img:
+                    img.draft("RGB", (max_side, max_side))
+                    return make_thumbnail(_pil_to_rgb(ImageOps.exif_transpose(img)), max_side)
+        except Exception:
+            pass
+        return make_thumbnail(read_image(p).rgb, max_side)
+    try:
+        with Image.open(p) as img:
+            img.draft("RGB", (max_side, max_side))
+            img = ImageOps.exif_transpose(img)
+            img = _to_srgb(img)
+            return make_thumbnail(_pil_to_rgb(img), max_side)
+    except (OSError, ValueError) as e:
+        raise ImageReadError(f"사진을 열 수 없습니다: {p.name} ({e})") from e

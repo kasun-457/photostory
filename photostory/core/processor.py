@@ -105,3 +105,7 @@ class Processor:
     def render(self, session: Session, preview: bool, token: CancelToken | None = None,
                generation: int | None = None, progress=None) -> RenderResult:
         return self.pipeline.render(self.params(session), preview, token, generation, progress)
+
+    def original_preview(self):
+        """결과 화면 비교용 원본 (미리보기 해상도)."""
+        return self.pipeline._base_frame(True).image
