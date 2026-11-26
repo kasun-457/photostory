@@ -101,10 +101,10 @@ def test_strength_zero_and_isolation(hub, portrait, tmp_path):
     s.customer.strength.set("tone", 1.4)
     r = proc.render(s, preview=True)
     assert "skin" not in r.timings and "tone" in r.timings
-    # 다른 부위(눈)를 바꾸면 피부·명암 모두 다시 계산하지 않는다
+    # 눈을 바꾸면 눈 반사점(5)부터 다시 계산한다. 그 앞의 피부(3·4)는 다시 하지 않는다
     s.customer.strength.set("eyes", 1.4)
     r = proc.render(s, preview=True)
-    assert "skin" not in r.timings and "tone" not in r.timings
+    assert "skin" not in r.timings and "catchlight" in r.timings
     proc.clear()
 
 

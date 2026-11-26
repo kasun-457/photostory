@@ -15,7 +15,7 @@ import numpy as np
 from ..models.hub import ModelHub
 from ..models.roles import REQUIRED_POINTS, FaceLandmarks, PersonSegmentation
 from .io.imageio import read_image
-from .measure import basic, eyes, spots
+from .measure import basic, catchlight, eyes, sharpness, spots
 from .pipeline import Analysis, CancelToken
 
 log = logging.getLogger(__name__)
@@ -80,6 +80,8 @@ def analyze(path: Path | str, hub: ModelHub, token: CancelToken | None = None,
     ey = eyes.measure_eyes(rgb, a.points)
     a.points.update(ey["points"])
     a.extra["level"] = ey["level"]
+    a.extra["sharpness"] = sharpness.feature_sharpness(rgb, a.points, a.regions)
+    a.extra["catchlight"] = catchlight.judge(rgb, a.points)
     t["eyes"] = time.perf_counter() - t0
     token.check()
 

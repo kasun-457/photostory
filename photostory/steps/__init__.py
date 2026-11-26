@@ -6,9 +6,11 @@ from __future__ import annotations
 
 from ..core.pipeline import Step
 from .a4 import A4Step
+from .catchlight import CatchlightStep
 from .background import BackgroundStep
 from .guides import GuidesStep
 from .level import LevelStep
+from .sharpen import SharpenStep
 from .skin import SkinStep
 from .tone import ToneStep
 from .transfer import TransferStep
@@ -19,7 +21,8 @@ def default_steps() -> list[Step]:
         LevelStep(),        # 1
         GuidesStep(),       # 2
         SkinStep(),        # 3·4 (규칙 방식: 액션 '수정-01')
-        # 5~6: 눈 반사점, 선명하게 (1단계)
+        CatchlightStep(),  # 5 (반사로 뚫린 눈이 한쪽에만 있을 때)
+        SharpenStep(),     # 6 (규칙 방식: 액션 '수정-02', 흐릴 때만)
         ToneStep(),        # 7 (규칙 방식: 액션 '닷징버닝')
         # 8~12: 대칭·목·머리카락·안경 (2단계)
         BackgroundStep(),   # 13
