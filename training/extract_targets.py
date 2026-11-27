@@ -278,6 +278,7 @@ def main(argv=None) -> int:
             except Exception as e:
                 row.status = f"읽기실패:{type(e).__name__}"
                 o = None
+            loads[i] = None     # 다 쓴 조각을 놓아준다 (안 놓으면 읽은 조각이 모두 메모리에 쌓여 수천 쌍 뒤 메모리 부족)
             if i + 3 < len(keys):
                 loads.append(io.submit(load_crop, crops, keys[i + 3]))
             if o is not None:
