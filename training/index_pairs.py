@@ -144,11 +144,16 @@ def read_index(path: Path) -> list[Pair]:
                     for k, v in r.items()}) for r in rows]
 
 
+RETRY_STATUS = ("읽기실패", "오류")
+
+
 def resume_manifest(path: Path) -> set[str]:
     """이어 하기용 기록(crops.csv·targets.csv)에서 끝난 key를 읽는다.
 
     작업을 중간에 끊으면 마지막 줄이 반쯤만 적혀 있을 수 있다 → 그 줄은 잘라 내고(다시 하게 됨),
     끝 칸(seconds)이 빈 줄도 끝난 것으로 치지 않는다.
+    '읽기실패'·'오류'(메모리 부족 같은 일시적 실패)는 다시 한다. 다시 한 결과는 아래에 새 줄로 붙고,
+    기록을 읽는 쪽은 status == 'ok' 줄만 쓰므로 옛 실패 줄은 그대로 둬도 된다.
     """
     if not path.exists():
         return set()
@@ -157,7 +162,8 @@ def resume_manifest(path: Path) -> set[str]:
         with open(path, "r+b") as fh:
             fh.truncate(data.rfind(b"\n") + 1)
     with open(path, newline="", encoding="utf-8-sig") as fh:
-        return {r["key"] for r in csv.DictReader(fh) if r.get("key") and r.get("seconds")}
+        return {r["key"] for r in csv.DictReader(fh)
+                if r.get("key") and r.get("seconds") and not r.get("status", "").startswith(RETRY_STATUS)}
 
 
 def summary(pairs: list[Pair]) -> str:

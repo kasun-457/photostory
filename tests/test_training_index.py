@@ -97,3 +97,7 @@ def test_resume_drops_half_written_last_line(tmp_path):
     assert resume_manifest(m) == {"aaa"}                 # 끝 칸이 빈 줄·반쯤 적힌 줄은 다시 함
     assert m.read_bytes().endswith(b"bbb,ok,\r\n")       # 반쯤 적힌 줄은 잘라 냄 → 다음 줄이 붙지 않음
     assert resume_manifest(tmp_path / "none.csv") == set()
+    rows = ["key,status,seconds", "aaa,ok,1.5", "ddd,읽기실패:error,0.1", "eee,오류:MemoryError,0.2",
+            "eee,ok,1.4", "fff,얼굴못찾음,0.3", ""]
+    m.write_bytes("\r\n".join(rows).encode("utf-8-sig"))
+    assert resume_manifest(m) == {"aaa", "eee", "fff"}  # 일시적 실패만 다시 (다시 해서 ok가 된 것은 끝남)
