@@ -1,0 +1,4 @@
+# 학습 도구 전용 (판매 프로그램에는 들어가지 않음). 개발 PC: RTX 3060, CUDA 12.6
+# py -3.12 -m pip install --user torch torchvision --index-url https://download.pytorch.org/whl/cu126
+torch>=2.6
+torchvision>=0.21
